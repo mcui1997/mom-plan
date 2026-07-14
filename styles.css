@@ -1,0 +1,67 @@
+:root {
+  --bg: #F4F3EE;
+  --card: #FFFFFF;
+  --ink: #1B2A25;
+  --ink-soft: #5D6B63;
+  --line: #E5E3DA;
+  --green: #2E5D4B;
+  --gold: #B08D57;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif { font-family: Georgia, "Times New Roman", serif; }
+
+/* Range sliders */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #E5E3DA;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 3px solid #fff;
+  cursor: pointer;
+}
+
+/* Number inputs */
+input[type="number"], input[type="text"], textarea {
+  font-family: inherit;
+  color: var(--ink);
+}
+input:focus, textarea:focus { outline: none; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; }
+.eyebrow {
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
