@@ -16,138 +16,7 @@ const C = {
   danger: "#B4553F",
 };
 
-const GROUPS = [
-  {
-    name: "Growth engine",
-    color: C.green,
-    items: [
-      { label: "US total market", ticker: "VTI", pct: 33, ret: 9.5 },
-      { label: "International", ticker: "VXUS", pct: 15, ret: 8 },
-    ],
-  },
-  {
-    name: "Inflation hedge",
-    color: C.gold,
-    items: [
-      { label: "Gold", ticker: "GLDM", pct: 7, ret: 4 },
-      { label: "Bitcoin", ticker: "IBIT", pct: 3, ret: 15 },
-    ],
-  },
-  {
-    name: "Bonds & ballast",
-    color: C.blue,
-    items: [
-      { label: "Core bonds", ticker: "BND", pct: 17, ret: 4.5 },
-      { label: "Long Treasuries", ticker: "TLT", pct: 6, ret: 4.5 },
-    ],
-  },
-  {
-    name: "Spending buffer",
-    color: C.stone,
-    items: [
-      { label: "T-bills", ticker: "SGOV", pct: 9, ret: 3.5 },
-      { label: "Cash / money mkt", ticker: "", pct: 10, ret: 3.5 },
-    ],
-  },
-];
-const ALL_ITEMS = GROUPS.flatMap((g) =>
-  g.items.map((i) => ({ ...i, groupColor: g.color })),
-);
-const BLENDED = ALL_ITEMS.reduce((n, i) => n + (i.pct / 100) * i.ret, 0);
-
-// Age -> account composition (illustrative conversion roadmap)
-const AGES = [56, 60, 66, 72, 80, 90];
-const FR = {
-  trad: [0.5, 0.5, 0.3, 0.1, 0.08, 0.06],
-  roth: [0.15, 0.16, 0.38, 0.59, 0.63, 0.67],
-  tax: [0.26, 0.25, 0.24, 0.24, 0.23, 0.22],
-  cash: [0.09, 0.09, 0.08, 0.07, 0.06, 0.05],
-};
-function lerpAt(age, arr) {
-  if (age <= AGES[0]) return arr[0];
-  if (age >= AGES[AGES.length - 1]) return arr[arr.length - 1];
-  for (let i = 0; i < AGES.length - 1; i++) {
-    if (age >= AGES[i] && age <= AGES[i + 1]) {
-      const t = (age - AGES[i]) / (AGES[i + 1] - AGES[i]);
-      return arr[i] + t * (arr[i + 1] - arr[i]);
-    }
-  }
-  return arr[arr.length - 1];
-}
-function composition(age) {
-  const raw = {
-    trad: lerpAt(age, FR.trad),
-    roth: lerpAt(age, FR.roth),
-    tax: lerpAt(age, FR.tax),
-    cash: lerpAt(age, FR.cash),
-  };
-  const s = raw.trad + raw.roth + raw.tax + raw.cash;
-  return {
-    trad: raw.trad / s,
-    roth: raw.roth / s,
-    tax: raw.tax / s,
-    cash: raw.cash / s,
-  };
-}
-
-const ACCOUNTS = [
-  {
-    key: "trad",
-    name: "Traditional IRA",
-    inst: "Fidelity",
-    color: C.blue,
-    assets: ["Bonds", "Some equity"],
-    role: "Tax-deferred. Shrinks each year as she converts to Roth.",
-    trend: "down",
-  },
-  {
-    key: "roth",
-    name: "Roth IRA",
-    inst: "Fidelity",
-    color: C.green,
-    assets: ["Stocks", "Bitcoin"],
-    role: "Tax-free forever — the best thing to inherit. Grows as she converts.",
-    trend: "up",
-  },
-  {
-    key: "tax",
-    name: "Individual / Taxable",
-    inst: "Fidelity",
-    color: C.gold,
-    assets: ["Stocks", "Gold", "T-bills"],
-    role: "Flexible; gets a tax step-up at death. Holds the buffer.",
-    trend: "flat",
-  },
-  {
-    key: "cash",
-    name: "Cash",
-    inst: "High-yield savings + Bank of America",
-    color: C.stone,
-    assets: ["Money market"],
-    role: "Her paycheck & buffer — she pays herself from here.",
-    trend: "flat",
-  },
-];
-
-const MAINTENANCE = [
-  "Rebalance once or twice a year. Only act on a sleeve that has drifted past its band — otherwise do nothing.",
-  "Trim equity toward the low end of its band only when market risk is clearly elevated. Small trims, never exits.",
-  "Bond tent: cash-like starts high (~19%) to protect the early-retirement years, then glides down as she ages.",
-  "Keep it boring on purpose. Low activity isn't no attention — the yearly check confirms each sleeve still does its job.",
-];
-const PRINCIPLES = [
-  { icon: "leaf", t: "Well-funded — my job is to let it run, not tinker." },
-  {
-    icon: "shield",
-    t: "Own real, uncorrelated assets — a little for every season.",
-  },
-  {
-    icon: "wallet",
-    t: "Never a forced seller — the cash buffer protects the stocks.",
-  },
-  { icon: "coins", t: "Quality of life over squeezing every last dollar." },
-];
-
+/* ---------------- formatting helpers ---------------- */
 const usd = (n) => "$" + Math.round(n).toLocaleString();
 const usdC = (n) =>
   n >= 1e6
@@ -157,6 +26,33 @@ const usdC = (n) =>
       : "$" + Math.round(n);
 const usdK = (n) => "$" + Math.round(n / 1000) + "k";
 
+/* ---------------- comma number input ---------------- */
+function CommaInput({ value, onChange, className, style, placeholder }) {
+  const [text, setText] = useState(
+    value != null ? Number(value).toLocaleString() : "",
+  );
+  useEffect(() => {
+    setText(value != null ? Number(value).toLocaleString() : "");
+  }, [value]);
+  const handleChange = (e) => {
+    const raw = e.target.value.replace(/[^0-9]/g, "");
+    setText(raw === "" ? "" : Number(raw).toLocaleString());
+    onChange(raw === "" ? 0 : Number(raw));
+  };
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={text}
+      onChange={handleChange}
+      className={className}
+      style={style}
+      placeholder={placeholder}
+    />
+  );
+}
+
+/* ---------------- icons ---------------- */
 const ICONS = {
   pencil: [
     <path key="a" d="M12 20h9" />,
@@ -196,15 +92,10 @@ const ICONS = {
     <path key="c" d="M8 2v4" />,
     <path key="d" d="M16 2v4" />,
   ],
-  trending: [
-    <polyline key="a" points="22 7 13.5 15.5 8.5 10.5 2 17" />,
-    <polyline key="b" points="16 7 22 7 22 13" />,
-  ],
   down: [<path key="a" d="M12 5v14" />, <path key="b" d="m19 12-7 7-7-7" />],
-  up: [<path key="a" d="M12 19V5" />, <path key="b" d="m5 12 7-7 7 7" />],
-  cap: [
-    <path key="a" d="M22 10 12 5 2 10l10 5 10-5Z" />,
-    <path key="b" d="M6 12v5c0 1 2 3 6 3s6-2 6-3v-5" />,
+  storm: [
+    <path key="a" d="M22 10 12 5 2 10l10 5 10-5Z" opacity="0" />,
+    <path key="b" d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />,
   ],
 };
 function Icon({ name, size = 16, color }) {
@@ -224,9 +115,125 @@ function Icon({ name, size = 16, color }) {
   );
 }
 
-function GrowthChart({ data, color }) {
+/* ---------------- phase + allocation engine ---------------- */
+const PHASES = [
+  { key: "build", label: "Build", blurb: "Time is your biggest asset." },
+  {
+    key: "sharpen",
+    label: "Sharpen",
+    blurb: "Compounding hard, risk coming into focus.",
+  },
+  {
+    key: "transition",
+    label: "Transition",
+    blurb: "Protecting the runway into retirement.",
+  },
+  { key: "live", label: "Live", blurb: "Living off it — make it last." },
+];
+function phaseFor(age, retirementAge) {
+  const yrs = retirementAge - age;
+  if (yrs <= 0) return "live";
+  if (yrs <= 5) return "transition";
+  if (yrs <= 15) return "sharpen";
+  return "build";
+}
+
+const BASE_GROWTH = { build: 88, sharpen: 72, transition: 52, live: 40 };
+const STABLE_SHARE_OF_REST = {
+  build: 0.55,
+  sharpen: 0.55,
+  transition: 0.55,
+  live: 0.45,
+};
+const RISK_SHIFT = { conservative: -15, neutral: 0, aggressive: 35 };
+
+const ASSET_RETURN = { us: 10.5, intl: 9, gold: 8, btc: 22, stable: 3.4, cash: 1.5 };
+const GROWTH_SPLIT = { us: 0.55, intl: 0.2, gold: 0.15, btc: 0.1 };
+
+function allocationFor(phase, risk) {
+  let growth = BASE_GROWTH[phase] + (RISK_SHIFT[risk] || 0);
+  growth = Math.max(15, Math.min(95, growth));
+  const rest = 100 - growth;
+  const stableShare = STABLE_SHARE_OF_REST[phase];
+  const stable = rest * stableShare;
+  const cash = rest * (1 - stableShare);
+  return {
+    growth,
+    stable,
+    cash,
+    us: growth * GROWTH_SPLIT.us,
+    intl: growth * GROWTH_SPLIT.intl,
+    gold: growth * GROWTH_SPLIT.gold,
+    btc: growth * GROWTH_SPLIT.btc,
+  };
+}
+
+function allocationFromGrowthPct(phase, growthPct) {
+  const growth = Math.max(15, Math.min(95, growthPct));
+  const rest = 100 - growth;
+  const stableShare = STABLE_SHARE_OF_REST[phase];
+  const stable = rest * stableShare;
+  const cash = rest * (1 - stableShare);
+  return {
+    growth,
+    stable,
+    cash,
+    us: growth * GROWTH_SPLIT.us,
+    intl: growth * GROWTH_SPLIT.intl,
+    gold: growth * GROWTH_SPLIT.gold,
+    btc: growth * GROWTH_SPLIT.btc,
+  };
+}
+
+function blendedReturn(alloc) {
+  return (
+    (alloc.us * ASSET_RETURN.us +
+      alloc.intl * ASSET_RETURN.intl +
+      alloc.gold * ASSET_RETURN.gold +
+      alloc.btc * ASSET_RETURN.btc +
+      alloc.stable * ASSET_RETURN.stable +
+      alloc.cash * ASSET_RETURN.cash) /
+    100
+  );
+}
+
+function growthPctForReturn(phase, targetReturn) {
+  const lo = 15,
+    hi = 95;
+  let bestPct = lo,
+    bestDiff = Infinity;
+  for (let p = lo; p <= hi; p += 1) {
+    const r = blendedReturn(allocationFromGrowthPct(phase, p));
+    const diff = Math.abs(r - targetReturn);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestPct = p;
+    }
+  }
+  return bestPct;
+}
+
+function riskForGrowthPct(phase, growthPct) {
+  const presets = ["conservative", "neutral", "aggressive"];
+  let best = "neutral",
+    bestDiff = Infinity;
+  presets.forEach((r) => {
+    const g = Math.max(15, Math.min(95, BASE_GROWTH[phase] + RISK_SHIFT[r]));
+    const diff = Math.abs(g - growthPct);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = r;
+    }
+  });
+  return best;
+}
+
+const GROWTH_RATE_MIN = 3;
+const GROWTH_RATE_MAX = 10;
+
+function GrowthChart({ data, color, markAge, onHover }) {
   const w = 560,
-    h = 180,
+    h = 190,
     padL = 50,
     padR = 10,
     padT = 10,
@@ -254,10 +261,48 @@ function GrowthChart({ data, color }) {
   const xticks = [];
   for (let a = Math.ceil(minAge / 5) * 5; a <= maxAge; a += 5) xticks.push(a);
   const yticks = [0, maxV / 2, maxV];
+
+  const handleMove = (e) => {
+    if (!onHover) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const xPx = ((e.clientX - rect.left) / rect.width) * w;
+    const ageAtX =
+      minAge + ((xPx - padL) / (w - padL - padR)) * (maxAge - minAge);
+    let nearest = data[0];
+    let bestDiff = Infinity;
+    for (const d of data) {
+      const diff = Math.abs(d.age - ageAtX);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        nearest = d;
+      }
+    }
+    onHover(nearest);
+  };
+  const handleLeave = () => {
+    if (onHover) onHover(null);
+  };
+
   return (
     <svg
       viewBox={"0 0 " + w + " " + h}
-      style={{ width: "100%", height: "auto", display: "block" }}
+      style={{
+        width: "100%",
+        height: "auto",
+        display: "block",
+        cursor: "crosshair",
+      }}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+      onTouchMove={(e) => {
+        if (!e.touches || !e.touches[0]) return;
+        handleMove({
+          currentTarget: e.currentTarget,
+          clientX: e.touches[0].clientX,
+        });
+      }}
+      onTouchEnd={handleLeave}
     >
       <defs>
         <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
@@ -281,6 +326,17 @@ function GrowthChart({ data, color }) {
       ))}
       <path d={area} fill="url(#grad)" />
       <path d={line} fill="none" stroke={color} strokeWidth="2.5" />
+      {markAge != null && markAge >= minAge && markAge <= maxAge && (
+        <line
+          x1={X(markAge)}
+          y1={padT}
+          x2={X(markAge)}
+          y2={h - padB}
+          stroke={C.gold}
+          strokeWidth="1.5"
+          strokeDasharray="4 3"
+        />
+      )}
       {xticks.map((a) => (
         <text
           key={a}
@@ -297,138 +353,208 @@ function GrowthChart({ data, color }) {
   );
 }
 
-const DEFAULTS = {
-  name: "Mom's Financial Plan",
-  northStar:
-    "I'm well-funded. The plan is simple, it's built, and my job is to let it run.",
-  age: 56,
-  portfolio: 2736000,
-  spending: 95000,
-  growthPct: 6,
-  college: 160483,
-};
-
-const FLOW = [
-  {
-    label: "Growth",
-    sub: "stocks · gold · bitcoin",
-    acct: "Fidelity",
-    note: "Trim a little only in good years",
-    color: C.green,
-  },
-  {
-    label: "Stable",
-    sub: "bonds",
-    acct: "Fidelity",
-    note: "Quietly refills the buffer below",
-    color: C.blue,
-  },
-  {
-    label: "Cash buffer",
-    sub: "T-bills · savings",
-    acct: "Fidelity + high-yield savings",
-    note: "2–3 years of spending, ready",
-    color: C.stone,
-  },
-  {
-    label: "Her paycheck",
-    sub: "what she lives on",
-    acct: "Bank of America",
-    note: "",
-    color: C.gold,
-  },
-];
-
-function FlowCard() {
+/* ---------------- age / phase bar ---------------- */
+function AgeBar({ age, retirementAge }) {
+  const lo = 20,
+    hi = Math.max(90, retirementAge + 5);
+  const span = hi - lo;
+  const stops = [
+    { until: retirementAge - 15, color: C.green },
+    { until: retirementAge - 5, color: C.gold },
+    { until: retirementAge, color: C.blue },
+    { until: hi, color: C.stone },
+  ];
+  let last = lo;
+  const segments = stops.map((s) => {
+    const start = Math.max(lo, last);
+    const end = Math.max(start, Math.min(hi, s.until));
+    last = end;
+    return { start, end, color: s.color };
+  });
+  const pct = (a) => ((Math.max(lo, Math.min(hi, a)) - lo) / span) * 100;
+  const phase = phaseFor(age, retirementAge);
+  const phaseInfo = PHASES.find((p) => p.key === phase);
   return (
-    <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
-      <div className="eyebrow mb-4">How the money flows</div>
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="flex-1">
-          {FLOW.map((f, i) => (
-            <div key={f.label}>
-              <div
-                className="rounded-xl px-4 py-3 flex items-center justify-between gap-3"
-                style={{ background: f.color }}
-              >
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span
-                      style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}
-                    >
-                      {f.label}
-                    </span>
-                    <span
-                      className="px-2 py-0.5 rounded-full"
-                      style={{
-                        background: "rgba(255,255,255,0.22)",
-                        color: "#fff",
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {f.acct}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      color: "#fff",
-                      opacity: 0.85,
-                      fontSize: 12,
-                      marginTop: 2,
-                    }}
-                  >
-                    {f.sub}
-                  </div>
-                </div>
-                {f.note && (
-                  <div
-                    style={{
-                      color: "#fff",
-                      opacity: 0.9,
-                      fontSize: 12,
-                      textAlign: "right",
-                      maxWidth: 140,
-                    }}
-                  >
-                    {f.note}
-                  </div>
-                )}
-              </div>
-              {i < FLOW.length - 1 && (
-                <div className="flex justify-center" style={{ height: 20 }}>
-                  <Icon name="down" size={17} color={C.inkSoft} />
-                </div>
-              )}
-            </div>
-          ))}
+    <div>
+      <div
+        className="relative"
+        style={{
+          height: 14,
+          borderRadius: 999,
+          overflow: "hidden",
+          display: "flex",
+        }}
+      >
+        {segments.map((s, i) =>
+          s.end > s.start ? (
+            <div
+              key={i}
+              style={{
+                width: ((s.end - s.start) / span) * 100 + "%",
+                background: s.color,
+              }}
+            />
+          ) : null,
+        )}
+      </div>
+      <div className="relative" style={{ height: 26 }}>
+        <div
+          className="absolute"
+          style={{
+            left: pct(retirementAge) + "%",
+            top: -20,
+            transform: "translateX(-50%)",
+            width: 2,
+            height: 20,
+            background: C.inkSoft,
+            opacity: 0.5,
+          }}
+        />
+        <div
+          className="absolute"
+          style={{
+            left: pct(retirementAge) + "%",
+            top: 2,
+            transform: "translateX(-50%)",
+            fontSize: 10,
+            color: C.inkSoft,
+            whiteSpace: "nowrap",
+          }}
+        >
+          retire at {retirementAge}
         </div>
         <div
-          className="rounded-xl px-4 py-4 md:self-center"
-          style={{ background: C.greenSoft, maxWidth: 250 }}
+          className="absolute"
+          style={{
+            left: pct(age) + "%",
+            top: -24,
+            transform: "translateX(-50%)",
+          }}
         >
-          <Icon name="shield" size={20} color={C.green} />
           <div
             style={{
-              fontWeight: 700,
-              fontSize: 14,
-              color: C.green,
-              marginTop: 6,
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              background: C.ink,
+              border: "3px solid #fff",
+              boxShadow: "0 1px 5px rgba(0,0,0,0.25)",
             }}
-          >
-            When markets drop
+          />
+        </div>
+      </div>
+      <div className="mt-3" style={{ fontSize: 13, color: C.inkSoft }}>
+        You're in <strong style={{ color: C.ink }}>{phaseInfo.label}</strong> —{" "}
+        {phaseInfo.blurb}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- questionnaire ---------------- */
+const Q_DEFAULTS = {
+  age: 35,
+  retirementAge: 65,
+  portfolio: 150000,
+  savings: 15000,
+  risk: "neutral",
+};
+
+function Questionnaire({ initial, onSubmit }) {
+  const [q, setQ] = useState(initial || Q_DEFAULTS);
+  const set = (patch) => setQ((p) => ({ ...p, ...patch }));
+  const preRetirement = q.age < q.retirementAge;
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center px-4 py-10">
+      <div className="w-full" style={{ maxWidth: 480 }}>
+        <div className="text-center mb-8">
+          <h1 className="serif" style={{ fontSize: 32, fontWeight: 600 }}>
+            Financial Freedom Plan
+          </h1>
+          <p style={{ fontSize: 14, color: C.inkSoft, marginTop: 6 }}>
+            Build financial freedom through long-term investing in diversified,
+            resilient assets.
+          </p>
+        </div>
+        <div className="card px-6 py-7 md:px-8 md:py-8">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="q-field">
+              <label>Current age</label>
+              <CommaInput value={q.age} onChange={(v) => set({ age: v })} />
+            </div>
+            <div className="q-field">
+              <label>Retirement age</label>
+              <CommaInput
+                value={q.retirementAge}
+                onChange={(v) => set({ retirementAge: v })}
+              />
+            </div>
           </div>
-          <div
+          <div className="q-field mt-4">
+            <label>Current portfolio value</label>
+            <CommaInput
+              value={q.portfolio}
+              onChange={(v) => set({ portfolio: v })}
+            />
+          </div>
+          {preRetirement && (
+            <div className="q-field mt-4">
+              <label>Annual savings (investing per year)</label>
+              <CommaInput
+                value={q.savings}
+                onChange={(v) => set({ savings: v })}
+              />
+            </div>
+          )}
+          <div className="mt-5">
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                color: C.inkSoft,
+                marginBottom: 8,
+              }}
+            >
+              Risk tolerance
+            </label>
+            <div
+              className="seg"
+              style={{
+                width: "100%",
+                justifyContent: "space-between",
+                display: "flex",
+              }}
+            >
+              {["conservative", "neutral", "aggressive"].map((r) => (
+                <button
+                  key={r}
+                  className={r === q.risk ? "active" : ""}
+                  style={{ flex: 1 }}
+                  onClick={() => set({ risk: r })}
+                >
+                  {r[0].toUpperCase() + r.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => onSubmit(q)}
+            className="w-full mt-7 rounded-full"
             style={{
-              fontSize: 13,
-              color: C.green,
-              lineHeight: 1.5,
-              marginTop: 4,
+              background: C.green,
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 15,
+              padding: "13px 0",
             }}
           >
-            She skips the trim at the top and just spends from cash. A crash
-            never forces her to sell stocks low — that's the whole point of the
-            buckets.
+            See my plan
+          </button>
+          <div
+            className="text-center mt-4"
+            style={{ fontSize: 11, color: C.inkSoft }}
+          >
+            Illustrative only — not financial advice.
           </div>
         </div>
       </div>
@@ -436,82 +562,282 @@ function FlowCard() {
   );
 }
 
-function Plan() {
-  const [s, setS] = useState(DEFAULTS);
-  const [loaded, setLoaded] = useState(false);
+/* ---------------- flow / allocation card ---------------- */
+function FlowCard({ alloc, portfolio }) {
+  const dollars = (pct) => (pct / 100) * portfolio;
+
+  const buckets = [
+    {
+      label: "Growth",
+      color: C.green,
+      soft: C.greenSoft,
+      pct: alloc.growth,
+      note: "The engine — long-term compounding",
+      sub: [
+        { label: "US stocks", pct: alloc.us },
+        { label: "International stocks", pct: alloc.intl },
+        { label: "Gold", pct: alloc.gold },
+        { label: "Bitcoin", pct: alloc.btc },
+      ],
+    },
+    {
+      label: "Stable",
+      color: C.blue,
+      soft: C.blueSoft,
+      pct: alloc.stable,
+      note: "Bonds & treasuries — ballast that steadies the ride",
+      sub: null,
+    },
+    {
+      label: "Cash buffer",
+      color: C.stone,
+      soft: "#F0EDE5",
+      pct: alloc.cash,
+      note: "T-bills & savings — spend from here first",
+      sub: null,
+    },
+  ];
+
+  return (
+    <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
+      <div className="eyebrow mb-1">Today's target mix</div>
+      <p style={{ fontSize: 13, color: C.inkSoft, marginBottom: 16 }}>
+        Based on {usdC(portfolio)} at your current growth-rate setting.
+      </p>
+
+      <div className="grid gap-4">
+        {buckets.map((b) => (
+          <div
+            key={b.label}
+            className="rounded-2xl px-5 py-5"
+            style={{
+              background: b.soft,
+              border: "1px solid " + b.color,
+              borderOpacity: 0.2,
+            }}
+          >
+            <div className="flex items-start justify-between flex-wrap gap-2">
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: b.color }}>
+                  {b.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    color: C.inkSoft,
+                    marginTop: 2,
+                    maxWidth: 380,
+                  }}
+                >
+                  {b.note}
+                </div>
+              </div>
+              <div className="text-right">
+                <div
+                  className="serif"
+                  style={{ fontSize: 26, fontWeight: 600, color: b.color }}
+                >
+                  {Math.round(b.pct)}%
+                </div>
+                <div style={{ fontSize: 13, color: C.inkSoft }}>
+                  {usdC(dollars(b.pct))}
+                </div>
+              </div>
+            </div>
+
+            {b.sub && (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {b.sub.map((s) => (
+                  <div
+                    key={s.label}
+                    className="rounded-xl px-3 py-2.5"
+                    style={{
+                      background: "rgba(255,255,255,0.6)",
+                      border: "1px solid rgba(0,0,0,0.06)",
+                    }}
+                  >
+                    <div style={{ fontSize: 11, color: C.inkSoft }}>
+                      {s.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: C.ink,
+                        marginTop: 2,
+                      }}
+                    >
+                      {s.pct.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: 11.5, color: C.inkSoft }}>
+                      {usdC(dollars(s.pct))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="mt-5 rounded-xl px-4 py-4"
+        style={{ background: C.greenSoft }}
+      >
+        <div className="flex items-start gap-2.5">
+          <Icon name="shield" size={20} color={C.green} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: C.green }}>
+              When markets drop
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: C.green,
+                lineHeight: 1.5,
+                marginTop: 4,
+              }}
+            >
+              Spend from cash and skip the trim. A downturn should never force a
+              sale of stocks at a loss — that's the whole point of the buckets.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- maintenance / principles ---------------- */
+const MAINTENANCE = [
+  "Rebalance once or twice a year. Only act on a sleeve that's drifted past its band — otherwise do nothing.",
+  "Trim growth toward the low end of its band only when risk is clearly elevated. Small trims, never exits.",
+  "Cash buffer stays sized to 2–3 years of spending once you're within a few years of retiring.",
+  "Keep it boring on purpose. Low activity isn't no attention — the yearly check confirms each sleeve still does its job.",
+];
+const PRINCIPLES = [
+  { icon: "leaf", t: "Stay well-funded — let it compound, don't tinker." },
+  {
+    icon: "shield",
+    t: "Own real, uncorrelated assets — a little for every season.",
+  },
+  {
+    icon: "wallet",
+    t: "Never be a forced seller — the cash buffer protects the stocks.",
+  },
+  { icon: "coins", t: "Quality of life over squeezing every last dollar." },
+];
+
+/* ---------------- result / plan view ---------------- */
+function Result({ answers, onReset }) {
+  const [a, setA] = useState(answers);
+  const [stress, setStress] = useState(false);
+  const [hoverPoint, setHoverPoint] = useState(null);
   const [edit, setEdit] = useState(false);
 
+  const [spendOverride, setSpendOverride] = useState(
+    answers.spendOverride ?? null,
+  );
+  const [growthOverride, setGrowthOverride] = useState(
+    answers.growthOverride ?? null,
+  );
+
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("mom-plan");
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (p && p.portfolio) setS({ ...DEFAULTS, ...p });
-      }
+      localStorage.setItem(
+        "ffp-answers",
+        JSON.stringify({ ...a, spendOverride, growthOverride }),
+      );
     } catch (e) {}
-    setLoaded(true);
-  }, []);
-  useEffect(() => {
-    if (!loaded) return;
-    try {
-      localStorage.setItem("mom-plan", JSON.stringify(s));
-    } catch (e) {}
-  }, [s, loaded]);
-  const set = (patch) => setS((p) => ({ ...p, ...patch }));
+  }, [a, spendOverride, growthOverride]);
+  const set = (patch) => setA((p) => ({ ...p, ...patch }));
 
-  const rate = s.portfolio > 0 ? (s.spending / s.portfolio) * 100 : 0;
-  const status =
-    rate < 3
-      ? { t: "Very safe", c: C.green }
-      : rate < 4
-        ? { t: "Comfortable", c: C.green }
-        : rate < 5
-          ? { t: "Watch it", c: C.gold }
-          : { t: "Stretch", c: C.danger };
-  const markerLeft = Math.max(2, Math.min(98, (rate / 6) * 100));
+  const preRetirement = a.age < a.retirementAge;
+  const phaseToday = phaseFor(a.age, a.retirementAge);
 
-  const passive = useMemo(() => {
-    const y = ALL_ITEMS.reduce((n, a) => {
-      const yld =
-        a.ticker === "BND" ||
-        a.ticker === "TLT" ||
-        a.ticker === "SGOV" ||
-        a.ticker === ""
-          ? a.ret / 100
-          : a.ticker === "VTI" || a.ticker === "VXUS"
-            ? 0.015
-            : 0;
-      return n + (a.pct / 100) * yld;
-    }, 0);
-    return s.portfolio * y;
-  }, [s.portfolio]);
+  const baseAllocToday = useMemo(
+    () => allocationFor(phaseToday, a.risk),
+    [phaseToday, a.risk],
+  );
+  const baseReturnToday = useMemo(
+    () => blendedReturn(baseAllocToday),
+    [baseAllocToday],
+  );
 
-  const proj = useMemo(() => {
-    const r = s.growthPct / 100;
+  const growthRate = growthOverride != null ? growthOverride : baseReturnToday;
+
+  const allocToday = useMemo(() => {
+    const growthPct = growthPctForReturn(phaseToday, growthRate);
+    return allocationFromGrowthPct(phaseToday, growthPct);
+  }, [phaseToday, growthRate]);
+
+  const effectiveRisk = useMemo(
+    () => riskForGrowthPct(phaseToday, allocToday.growth),
+    [phaseToday, allocToday.growth],
+  );
+
+  const sim = useMemo(() => {
     const data = [];
-    let bal = s.portfolio;
+    let bal = a.portfolio;
+    let balAtRetirement = null;
+    let ruleSpend = null;
     let runOut = null;
-    for (let a = s.age; a <= 90; a++) {
-      data.push({ age: a, value: Math.max(0, Math.round(bal)) });
-      bal = bal * (1 + r) - s.spending;
-      if (bal <= 0 && runOut === null) runOut = a + 1;
+    const stressYears = stress ? 3 : 0;
+    for (let age = a.age; age <= 90; age++) {
+      data.push({ age, value: Math.max(0, Math.round(bal)) });
+      const phase = phaseFor(age, a.retirementAge);
+      let r = growthRate / 100;
+      const yearsIntoRetirement = age - a.retirementAge;
+      if (yearsIntoRetirement >= 0 && yearsIntoRetirement < stressYears) {
+        r = r - (yearsIntoRetirement === 0 ? 0.22 : 0.08);
+      }
+      if (age === a.retirementAge) {
+        balAtRetirement = bal;
+        ruleSpend = bal * 0.04;
+      }
+      if (age < a.retirementAge) {
+        bal = bal * (1 + r) + a.savings;
+      } else {
+        const spend =
+          spendOverride != null
+            ? spendOverride
+            : ruleSpend != null
+              ? ruleSpend
+              : bal * 0.04;
+        bal = bal * (1 + r) - spend;
+      }
+      if (bal <= 0 && runOut === null) runOut = age + 1;
     }
-    return { data, end: data[data.length - 1].value, runOut };
-  }, [s.age, s.portfolio, s.spending, s.growthPct]);
-
-  const comp = useMemo(() => composition(s.age), [s.age]);
-  const acctVal = {
-    trad: s.portfolio * comp.trad,
-    roth: s.portfolio * comp.roth,
-    tax: s.portfolio * comp.tax,
-    cash: s.portfolio * comp.cash,
-  };
+    if (balAtRetirement === null) {
+      balAtRetirement = a.portfolio;
+      ruleSpend = a.portfolio * 0.04;
+    }
+    const actualSpend = spendOverride != null ? spendOverride : ruleSpend;
+    const withdrawalRate =
+      balAtRetirement > 0 ? (actualSpend / balAtRetirement) * 100 : 0;
+    return {
+      data,
+      balAtRetirement,
+      ruleSpend,
+      actualSpend,
+      withdrawalRate,
+      runOut,
+      end: data[data.length - 1].value,
+    };
+  }, [
+    a.age,
+    a.retirementAge,
+    a.portfolio,
+    a.savings,
+    growthRate,
+    spendOverride,
+    stress,
+  ]);
 
   const numInput = (val, on, w = 120) => (
-    <input
-      type="number"
+    <CommaInput
       value={val}
-      onChange={(e) => on(Number(e.target.value))}
+      onChange={on}
       className="px-2 py-1 rounded"
       style={{ border: "1px solid " + C.line, width: w }}
     />
@@ -520,39 +846,31 @@ function Plan() {
   return (
     <div className="min-h-screen w-full px-4 py-8 md:px-8">
       <div className="mx-auto" style={{ maxWidth: 900 }}>
-        {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
-          <div className="flex-1">
-            {edit ? (
-              <input
-                value={s.name}
-                onChange={(e) => set({ name: e.target.value })}
-                className="serif w-full px-3 py-2 rounded-lg"
-                style={{ border: "1px solid " + C.line, fontSize: 28 }}
-              />
-            ) : (
-              <h1
-                className="serif"
-                style={{ fontSize: 34, lineHeight: 1.1, fontWeight: 600 }}
-              >
-                {s.name}
-              </h1>
-            )}
+          <div>
+            <h1
+              className="serif"
+              style={{ fontSize: 32, lineHeight: 1.1, fontWeight: 600 }}
+            >
+              Financial Freedom Plan
+            </h1>
+            <p style={{ fontSize: 13, color: C.inkSoft, marginTop: 4 }}>
+              Build financial freedom through long-term investing in
+              diversified, resilient assets.
+            </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {edit && (
-              <button
-                onClick={() => setS(DEFAULTS)}
-                className="flex items-center gap-1 px-3 rounded-full text-sm"
-                style={{
-                  height: 40,
-                  border: "1px solid " + C.line,
-                  color: C.inkSoft,
-                }}
-              >
-                <Icon name="rotate" size={13} /> Reset
-              </button>
-            )}
+            <button
+              onClick={onReset}
+              className="flex items-center gap-1 px-3 rounded-full text-sm"
+              style={{
+                height: 40,
+                border: "1px solid " + C.line,
+                color: C.inkSoft,
+              }}
+            >
+              <Icon name="rotate" size={13} /> Reset
+            </button>
             <button
               onClick={() => setEdit((v) => !v)}
               className="rounded-full flex items-center justify-center"
@@ -573,564 +891,276 @@ function Plan() {
           </div>
         </div>
 
-        {/* North star */}
-        <div
-          className="mb-5 px-6 py-6 md:px-8 md:py-7 card"
-          style={{ background: C.green }}
-        >
-          {edit ? (
-            <textarea
-              value={s.northStar}
-              onChange={(e) => set({ northStar: e.target.value })}
-              rows={2}
-              className="serif w-full bg-transparent resize-none"
-              style={{ color: "#fff", fontSize: 22, lineHeight: 1.35 }}
-            />
-          ) : (
-            <p
-              className="serif"
-              style={{
-                color: "#F4F3EE",
-                fontSize: 23,
-                lineHeight: 1.35,
-                fontWeight: 500,
-              }}
-            >
-              &ldquo;{s.northStar}&rdquo;
-            </p>
-          )}
-        </div>
-
-        {/* Today strip */}
         <div className="mb-6 grid grid-cols-2 gap-4">
           <div className="px-5 py-4 card">
             <div style={{ fontSize: 12, color: C.inkSoft }}>Age</div>
             {edit ? (
-              numInput(s.age, (v) => set({ age: v }), 80)
+              numInput(a.age, (v) => set({ age: v }), 80)
             ) : (
               <div className="serif" style={{ fontSize: 30, fontWeight: 600 }}>
-                {s.age}
+                {a.age}
               </div>
             )}
           </div>
           <div className="px-5 py-4 card">
             <div style={{ fontSize: 12, color: C.inkSoft }}>
-              Savings (excl. college)
+              Portfolio today
             </div>
             {edit ? (
-              numInput(s.portfolio, (v) => set({ portfolio: v }), 150)
+              numInput(a.portfolio, (v) => set({ portfolio: v }), 150)
             ) : (
               <div className="serif" style={{ fontSize: 30, fontWeight: 600 }}>
-                {usdC(s.portfolio)}
+                {usdC(a.portfolio)}
               </div>
             )}
           </div>
         </div>
 
-        {/* Am I okay */}
         <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
-          <div className="eyebrow mb-4">Am I okay?</div>
-          <div className="flex flex-col md:flex-row md:justify-between gap-6">
-            <div className="flex-1">
-              <div className="flex items-center gap-4">
-                <span
-                  className="serif"
-                  style={{
-                    fontSize: 52,
-                    fontWeight: 600,
-                    color: status.c,
-                    lineHeight: 1,
-                  }}
-                >
-                  {rate.toFixed(1)}%
+          <div className="eyebrow mb-3">The verdict</div>
+          {preRetirement ? (
+            <p
+              className="serif"
+              style={{ fontSize: 22, lineHeight: 1.4, fontWeight: 500 }}
+            >
+              At this pace, you're on track for about{" "}
+              <span style={{ color: C.green, fontWeight: 700 }}>
+                {usdC(sim.balAtRetirement)}
+              </span>{" "}
+              by age {a.retirementAge} — enough to safely spend roughly{" "}
+              <span style={{ color: C.green, fontWeight: 700 }}>
+                {usd(sim.ruleSpend)}/yr
+              </span>{" "}
+              using the 4% rule.
+            </p>
+          ) : (
+            <p
+              className="serif"
+              style={{ fontSize: 22, lineHeight: 1.4, fontWeight: 500 }}
+            >
+              Based on the 4% rule, you can safely spend about{" "}
+              <span style={{ color: C.green, fontWeight: 700 }}>
+                {usd(sim.ruleSpend)}/yr
+              </span>{" "}
+              from your {usdC(a.portfolio)}.
+            </p>
+          )}
+          {sim.runOut && (
+            <p style={{ fontSize: 13, color: C.danger, marginTop: 6 }}>
+              At this pace, funds would run low around age {sim.runOut}. Raising
+              savings, lowering the retirement-age target, lowering spending, or
+              reducing the growth-rate assumption would fix this.
+            </p>
+          )}
+
+          <div className="mt-6">
+            <AgeBar age={a.age} retirementAge={a.retirementAge} />
+          </div>
+
+          <div className="mt-6 grid sm:grid-cols-2 gap-5">
+            <div>
+              <div
+                className="flex justify-between mb-1"
+                style={{ fontSize: 12, color: C.inkSoft }}
+              >
+                <span>Retirement age</span>
+                <span style={{ fontWeight: 700, color: C.ink }}>
+                  {a.retirementAge}
                 </span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>
-                    of her savings
-                  </div>
-                  <div style={{ fontSize: 13, color: C.inkSoft }}>
-                    spent per year
-                  </div>
-                  <span
-                    className="inline-block mt-1 px-2 py-0.5 rounded-full"
-                    style={{
-                      background: status.c,
-                      color: "#fff",
-                      fontWeight: 700,
-                      fontSize: 12,
+              </div>
+              <input
+                type="range"
+                min={Math.max(a.age + 1, 45)}
+                max={75}
+                step={1}
+                value={a.retirementAge}
+                onChange={(e) => set({ retirementAge: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 6 }}>
+                Risk tolerance
+              </div>
+              <div className="seg" style={{ display: "flex" }}>
+                {["conservative", "neutral", "aggressive"].map((r) => (
+                  <button
+                    key={r}
+                    className={r === effectiveRisk ? "active" : ""}
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      set({ risk: r });
+                      setGrowthOverride(null);
                     }}
                   >
-                    {status.t}
-                  </span>
-                </div>
-              </div>
-              <p
-                className="mt-4"
-                style={{
-                  fontSize: 14,
-                  color: C.inkSoft,
-                  lineHeight: 1.5,
-                  maxWidth: 460,
-                }}
-              >
-                She'd spend {usd(s.spending)} a year from {usd(s.portfolio)}.
-                Planners call <strong style={{ color: C.ink }}>4%</strong> the
-                &ldquo;safe-forever&rdquo; line — spend under it and savings
-                generally last for life. She's{" "}
-                {rate < 4 ? "comfortably under it." : "at or above it."}
-              </p>
-            </div>
-            <div
-              className="rounded-xl px-4 py-4 shrink-0"
-              style={{ background: C.greenSoft, minWidth: 200 }}
-            >
-              <div style={{ fontSize: 12, color: C.green }}>
-                Her money quietly earns
-              </div>
-              <div
-                className="serif"
-                style={{ fontSize: 26, color: C.green, fontWeight: 600 }}
-              >
-                {usd(passive)}/yr
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: C.green,
-                  opacity: 0.85,
-                  marginTop: 2,
-                }}
-              >
-                in interest &amp; dividends —{" "}
-                {passive >= s.spending
-                  ? "covering her whole year"
-                  : "toward her spending"}{" "}
-                without selling a thing.
+                    {r[0].toUpperCase() + r.slice(1)}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
-          <div className="relative mt-7" style={{ height: 46 }}>
-            <div
-              className="absolute w-full rounded-full overflow-hidden flex"
-              style={{ height: 14, top: 6 }}
-            >
-              <div
-                style={{ width: (4 / 6) * 100 + "%", background: C.greenSoft }}
-              />
-              <div
-                style={{ width: (1 / 6) * 100 + "%", background: C.goldSoft }}
-              />
-              <div
-                style={{ width: (1 / 6) * 100 + "%", background: "#F1DED8" }}
-              />
-            </div>
-            <div
-              className="absolute"
-              style={{
-                left: (4 / 6) * 100 + "%",
-                top: -2,
-                height: 30,
-                width: 2,
-                background: C.inkSoft,
-                opacity: 0.55,
-              }}
-            />
-            <div
-              className="absolute"
-              style={{
-                left: (4 / 6) * 100 + "%",
-                top: 30,
-                transform: "translateX(-50%)",
-                fontSize: 11,
-                color: C.inkSoft,
-                whiteSpace: "nowrap",
-              }}
-            >
-              4% safe line
-            </div>
-            <div
-              className="absolute"
-              style={{ left: 0, top: 30, fontSize: 11, color: C.inkSoft }}
-            >
-              spends less
-            </div>
-            <div
-              className="absolute"
-              style={{
-                left: markerLeft + "%",
-                top: 0,
-                transform: "translateX(-50%)",
-                transition: "left 300ms ease",
-              }}
-            >
-              <div
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: "50%",
-                  background: status.c,
-                  border: "3px solid #fff",
-                  boxShadow: "0 1px 5px rgba(0,0,0,0.22)",
-                }}
-              />
-            </div>
-          </div>
-          <div className="mt-6">
+
+          <div className="mt-5">
             <div
               className="flex justify-between mb-1"
               style={{ fontSize: 12, color: C.inkSoft }}
             >
-              <span>Try a spending level</span>
-              <span style={{ fontWeight: 600, color: C.ink }}>
-                {usdK(s.spending)}/yr
+              <span>Spending in retirement</span>
+              <span style={{ fontWeight: 700, color: C.ink }}>
+                {usd(sim.actualSpend)}/yr · {sim.withdrawalRate.toFixed(1)}%
+                withdrawal
               </span>
             </div>
             <input
               type="range"
-              min={40000}
-              max={140000}
-              step={2500}
-              value={s.spending}
-              onChange={(e) => set({ spending: Number(e.target.value) })}
+              min={0}
+              max={Math.max(sim.ruleSpend * 3, 10000)}
+              step={500}
+              value={sim.actualSpend}
+              onChange={(e) => setSpendOverride(Number(e.target.value))}
             />
-            <div
-              className="flex justify-between mt-1"
-              style={{ fontSize: 11, color: C.inkSoft }}
-            >
-              <span>Comfortable ~$70k</span>
-              <span>Generous ~$95k</span>
-              <span>Everything ~$120k</span>
+            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>
+              4%-rule reference: {usd(sim.ruleSpend)}/yr
+              {spendOverride != null && (
+                <button
+                  onClick={() => setSpendOverride(null)}
+                  style={{
+                    marginLeft: 8,
+                    color: C.gold,
+                    textDecoration: "underline",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  reset to 4% rule
+                </button>
+              )}
             </div>
           </div>
+
+          {preRetirement && (
+            <div className="mt-5">
+              <div
+                className="flex justify-between mb-1"
+                style={{ fontSize: 12, color: C.inkSoft }}
+              >
+                <span>Annual savings (investing per year)</span>
+                <span style={{ fontWeight: 700, color: C.ink }}>
+                  {usdK(a.savings)}/yr
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={80000}
+                step={1000}
+                value={a.savings}
+                onChange={(e) => set({ savings: Number(e.target.value) })}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Growth projection */}
+        {/* Projection */}
         <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
           <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-            <div className="eyebrow">What it could grow to</div>
-            <div style={{ fontSize: 13, color: C.inkSoft }}>
-              by age 90 →{" "}
-              <span
-                className="serif"
-                style={{
-                  fontSize: 22,
-                  fontWeight: 600,
-                  color: proj.runOut ? C.danger : C.green,
-                }}
-              >
-                {proj.runOut ? "runs out ~" + proj.runOut : usdC(proj.end)}
-              </span>
-            </div>
+            <div className="eyebrow">How it plays out</div>
+            <button
+              onClick={() => setStress((v) => !v)}
+              className="flex items-center gap-1 px-3 py-1 rounded-full text-xs"
+              style={{
+                border: "1px solid " + C.line,
+                background: stress ? C.goldSoft : C.card,
+                color: stress ? C.gold : C.inkSoft,
+                fontWeight: 600,
+              }}
+            >
+              <Icon
+                name="storm"
+                size={13}
+                color={stress ? C.gold : C.inkSoft}
+              />{" "}
+              Rough start in retirement
+            </button>
           </div>
           <p
             className="mb-3"
             style={{ fontSize: 13, color: C.inkSoft, maxWidth: 560 }}
           >
-            From {usdC(s.portfolio)} at age {s.age}, growing {s.growthPct}% a
-            year while she spends {usdK(s.spending)}.{" "}
-            {proj.runOut
-              ? "At this rate it would run low — raise returns or lower spending."
-              : "It keeps growing even while she spends."}
+            From {usdC(a.portfolio)} today,{" "}
+            {preRetirement
+              ? `investing ${usdK(a.savings)}/yr until ${a.retirementAge}, then `
+              : ""}
+            spending about {usd(sim.actualSpend)}/yr from age {a.retirementAge}{" "}
+            on, assuming {growthRate.toFixed(1)}%/yr growth.{" "}
+            {stress
+              ? "This run assumes a rough first few years of retirement — a real stress test."
+              : "This run assumes steady average returns each year."}
           </p>
-          <GrowthChart data={proj.data} color={C.green} />
-          <div className="mt-4">
-            <div
-              className="flex justify-between mb-1"
-              style={{ fontSize: 12, color: C.inkSoft }}
-            >
-              <span className="flex items-center gap-1">
-                <Icon name="trending" size={13} /> Average return per year
-              </span>
-              <span style={{ fontWeight: 600, color: C.ink }}>
-                {s.growthPct}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min={3}
-              max={10}
-              step={0.5}
-              value={s.growthPct}
-              onChange={(e) => set({ growthPct: Number(e.target.value) })}
-            />
-            <div
-              className="flex justify-between mt-1"
-              style={{ fontSize: 11, color: C.inkSoft }}
-            >
-              <span>Cautious 3%</span>
-              <span>Her plan ~6–7%</span>
-              <span>Strong 10%</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Where it lives + what she owns */}
-        <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
-          <div className="eyebrow mb-4">Where it lives — and how it moves</div>
-
-          {/* age scrubber */}
           <div className="mb-4">
             <div
+              className="serif"
+              style={{
+                fontSize: 34,
+                fontWeight: 600,
+                color: C.green,
+                lineHeight: 1.1,
+              }}
+            >
+              {usdC(hoverPoint ? hoverPoint.value : sim.data[0].value)}
+            </div>
+            <div style={{ fontSize: 13, color: C.inkSoft, marginTop: 2 }}>
+              {hoverPoint ? (
+                <>
+                  at age{" "}
+                  <strong style={{ color: C.ink }}>{hoverPoint.age}</strong>
+                </>
+              ) : (
+                "hover the chart to see any year"
+              )}
+            </div>
+          </div>
+          <div className="mb-5">
+            <div
               className="flex justify-between mb-1"
               style={{ fontSize: 12, color: C.inkSoft }}
             >
-              <span>See the accounts at age</span>
-              <span style={{ fontWeight: 700, color: C.ink }}>{s.age}</span>
+              <span>Growth rate — cautious to insane</span>
+              <span style={{ fontWeight: 700, color: C.ink }}>
+                {growthRate.toFixed(1)}%/yr
+              </span>
             </div>
             <input
               type="range"
-              min={56}
-              max={90}
-              step={1}
-              value={s.age}
-              onChange={(e) => set({ age: Number(e.target.value) })}
+              min={GROWTH_RATE_MIN}
+              max={GROWTH_RATE_MAX}
+              step={0.1}
+              value={growthRate}
+              onChange={(e) => setGrowthOverride(Number(e.target.value))}
             />
             <div
-              className="flex justify-between mt-1"
-              style={{ fontSize: 11, color: C.inkSoft }}
+              className="flex justify-between"
+              style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}
             >
-              <span>56 · today</span>
-              <span>72 · conversions done</span>
-              <span>90</span>
+              <span>3% cautious</span>
+              <span>6.5% moderate</span>
+              <span>10% strong</span>
             </div>
           </div>
 
-          {/* stacked migration bar */}
-          <div
-            className="w-full rounded-full overflow-hidden flex mb-2"
-            style={{ height: 26 }}
-          >
-            {ACCOUNTS.map((a) => (
-              <div
-                key={a.key}
-                style={{
-                  width: comp[a.key] * 100 + "%",
-                  background: a.color,
-                  transition: "width 300ms",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {comp[a.key] > 0.08 && (
-                  <span
-                    style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}
-                  >
-                    {Math.round(comp[a.key] * 100)}%
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="mb-5" style={{ fontSize: 12, color: C.inkSoft }}>
-            As she converts each year, money migrates from{" "}
-            <span style={{ color: C.blue, fontWeight: 700 }}>Traditional</span>{" "}
-            (taxed later) into{" "}
-            <span style={{ color: C.green, fontWeight: 700 }}>Roth</span>{" "}
-            (tax-free forever). Drag the age to watch it.
-          </div>
-
-          {/* account cards */}
-          <div className="grid sm:grid-cols-2 gap-3 mb-5">
-            {ACCOUNTS.map((a) => (
-              <div
-                key={a.key}
-                className="rounded-xl px-4 py-3"
-                style={{ background: C.bg, border: "1px solid " + C.line }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 4,
-                        background: a.color,
-                      }}
-                    />
-                    <span style={{ fontWeight: 700, fontSize: 14 }}>
-                      {a.name}
-                    </span>
-                    {a.trend !== "flat" && (
-                      <Icon
-                        name={a.trend}
-                        size={13}
-                        color={a.trend === "up" ? C.green : C.danger}
-                      />
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <div
-                      className="serif"
-                      style={{ fontSize: 16, fontWeight: 600, color: a.color }}
-                    >
-                      {usdC(acctVal[a.key])}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.inkSoft }}>
-                      {Math.round(comp[a.key] * 100)}% of total
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
-                  {a.inst}
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {a.assets.map((t) => (
-                    <span
-                      key={t}
-                      className="px-2 py-0.5 rounded-full"
-                      style={{
-                        background: C.card,
-                        border: "1px solid " + C.line,
-                        fontSize: 11,
-                      }}
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: C.inkSoft,
-                    marginTop: 6,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {a.role}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div
-            className="rounded-xl px-4 py-3 mb-6 flex items-start gap-2"
-            style={{ background: C.greenSoft }}
-          >
-            <Icon name="shield" size={18} color={C.green} />
-            <div style={{ fontSize: 13, color: C.green, lineHeight: 1.5 }}>
-              She pays herself from <strong>Cash (Bank of America)</strong>,
-              refilled from the buckets above. When markets drop she simply
-              spends from cash and skips the trim — so a crash never forces her
-              to sell stocks low.
-            </div>
-          </div>
-
-          {/* target mix */}
-          <div className="pt-5" style={{ borderTop: "1px solid " + C.line }}>
-            <div className="flex items-baseline justify-between mb-3">
-              <div style={{ fontWeight: 700, fontSize: 14 }}>
-                What she owns — the target mix
-              </div>
-              <div style={{ fontSize: 12, color: C.inkSoft }}>
-                blended ~{BLENDED.toFixed(1)}%/yr
-              </div>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
-              {GROUPS.map((g) => (
-                <div key={g.name}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 3,
-                        background: g.color,
-                      }}
-                    />
-                    <span style={{ fontWeight: 700, fontSize: 13 }}>
-                      {g.name}
-                    </span>
-                  </div>
-                  {g.items.map((i) => (
-                    <div
-                      key={i.label}
-                      className="flex justify-between pl-4"
-                      style={{ fontSize: 13, color: C.inkSoft }}
-                    >
-                      <span>
-                        {i.label}{" "}
-                        {i.ticker && (
-                          <span style={{ color: C.gold, fontWeight: 600 }}>
-                            {i.ticker}
-                          </span>
-                        )}
-                      </span>
-                      <span>
-                        <span style={{ color: C.ink, fontWeight: 600 }}>
-                          {i.pct}%
-                        </span>{" "}
-                        · {usdC((s.portfolio * i.pct) / 100)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: C.inkSoft,
-                marginTop: 8,
-                fontStyle: "italic",
-              }}
-            >
-              Account totals migrate with age (above); the target mix is what
-              she holds across all of them.
-            </div>
-          </div>
+          <GrowthChart
+            data={sim.data}
+            color={C.green}
+            markAge={a.retirementAge}
+            onHover={setHoverPoint}
+          />
         </div>
 
-        {/* 529 — separate */}
-        <div className="mb-6 px-6 py-5 card" style={{ background: C.goldSoft }}>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Icon name="cap" size={20} color={C.gold} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>
-                  College fund (529)
-                </div>
-                <div style={{ fontSize: 12, color: C.inkSoft }}>
-                  For children and grandchildren, not counted above
-                </div>
-              </div>
-            </div>
-            {edit ? (
-              numInput(s.college, (v) => set({ college: v }), 140)
-            ) : (
-              <div
-                className="serif"
-                style={{ fontSize: 24, fontWeight: 600, color: C.gold }}
-              >
-                {usdC(s.college)}
-              </div>
-            )}
-          </div>
-        </div>
+        <FlowCard alloc={allocToday} portfolio={a.portfolio} />
 
-        {/* Money flow */}
-        <FlowCard />
-
-        {/* Maintenance + principles */}
         <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
-          <div className="eyebrow mb-4">How she runs it</div>
-          <div className="flex flex-wrap gap-x-5 gap-y-2 mb-5">
-            {[
-              { icon: "wallet", t: "Pay herself from cash", s: "ongoing" },
-              { icon: "refresh", t: "Rebalance", s: "1–2×/yr if drifted" },
-              { icon: "calendar", t: "Roth convert", s: "each Oct–Nov" },
-            ].map((it) => (
-              <span
-                key={it.t}
-                className="flex items-center gap-2"
-                style={{ fontSize: 13 }}
-              >
-                <Icon name={it.icon} size={16} color={C.green} />
-                <span style={{ fontWeight: 600 }}>{it.t}</span>
-                <span style={{ color: C.inkSoft }}>· {it.s}</span>
-              </span>
-            ))}
-          </div>
+          <div className="eyebrow mb-4">How to run it</div>
           <div className="grid gap-2 mb-5">
             {MAINTENANCE.map((m, i) => (
               <div
@@ -1166,18 +1196,73 @@ function Plan() {
               </div>
             ))}
           </div>
+          <div
+            className="mt-5 rounded-xl px-4 py-3 flex items-start gap-2"
+            style={{ background: C.blueSoft }}
+          >
+            <Icon name="wallet" size={17} color={C.blue} />
+            <div style={{ fontSize: 12.5, color: C.blue, lineHeight: 1.5 }}>
+              If you have access to tax-advantaged accounts (401k, IRA, Roth),
+              prioritize filling those first — this plan covers the asset mix,
+              not the account wrapper.
+            </div>
+          </div>
         </div>
 
         <div
           className="text-center pb-4"
           style={{ fontSize: 12, color: C.inkSoft }}
         >
-          A plan to feel calm about — not a document to study. Not financial
-          advice.
+          A compass to feel calm about — not a document to study. Reflects a
+          specific investing thesis (real assets, always some gold and bitcoin).
+          Not financial advice.
         </div>
       </div>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<Plan />);
+/* ---------------- root ---------------- */
+function App() {
+  const [answers, setAnswers] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ffp-answers");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p && p.portfolio) setAnswers(p);
+      }
+    } catch (e) {}
+    setLoaded(true);
+  }, []);
+
+  if (!loaded) return null;
+
+  if (!answers) {
+    return (
+      <Questionnaire
+        onSubmit={(q) => {
+          try {
+            localStorage.setItem("ffp-answers", JSON.stringify(q));
+          } catch (e) {}
+          setAnswers(q);
+        }}
+      />
+    );
+  }
+  return (
+    <Result
+      answers={answers}
+      onReset={() => {
+        try {
+          localStorage.removeItem("ffp-answers");
+        } catch (e) {}
+        setAnswers(null);
+      }}
+    />
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);

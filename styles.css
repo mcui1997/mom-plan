@@ -7,9 +7,7 @@
   --green: #2E5D4B;
   --gold: #B08D57;
 }
-
 * { box-sizing: border-box; }
-
 body {
   margin: 0;
   background: var(--bg);
@@ -17,7 +15,6 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-
 .serif { font-family: Georgia, "Times New Roman", serif; }
 
 /* Range sliders */
@@ -50,7 +47,7 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-/* Number inputs */
+/* Number/text inputs */
 input[type="number"], input[type="text"], textarea {
   font-family: inherit;
   color: var(--ink);
@@ -64,4 +61,44 @@ input:focus, textarea:focus { outline: none; }
   color: var(--gold);
   font-weight: 700;
   letter-spacing: 0.14em;
+}
+
+/* Risk / segmented toggle */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  background: var(--bg);
+}
+.seg button {
+  border: none;
+  background: transparent;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+.seg button.active {
+  background: var(--green);
+  color: #fff;
+}
+
+/* Questionnaire field */
+.q-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+.q-field input{
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 18px;
+  background: #fff;
 }
