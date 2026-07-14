@@ -1,4 +1,4 @@
-# Mom's Financial Plan
+# Plan Model
 
 A one-page, interactive retirement dashboard — built to feel calm about, not to study.
 
