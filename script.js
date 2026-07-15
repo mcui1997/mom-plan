@@ -28,9 +28,7 @@ const usdK = (n) => "$" + Math.round(n / 1000) + "k";
 
 /* ---------------- comma number input ---------------- */
 function CommaInput({ value, onChange, className, style, placeholder }) {
-  const [text, setText] = useState(
-    value != null ? Number(value).toLocaleString() : "",
-  );
+  const [text, setText] = useState(value != null ? Number(value).toLocaleString() : "");
   useEffect(() => {
     setText(value != null ? Number(value).toLocaleString() : "");
   }, [value]);
@@ -97,6 +95,10 @@ const ICONS = {
     <path key="a" d="M22 10 12 5 2 10l10 5 10-5Z" opacity="0" />,
     <path key="b" d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />,
   ],
+  compass: [
+    <circle key="a" cx="12" cy="12" r="10" />,
+    <polygon key="b" points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />,
+  ],
 };
 function Icon({ name, size = 16, color }) {
   return (
@@ -118,17 +120,9 @@ function Icon({ name, size = 16, color }) {
 /* ---------------- phase + allocation engine ---------------- */
 const PHASES = [
   { key: "build", label: "Build", blurb: "Time is your biggest asset." },
-  {
-    key: "sharpen",
-    label: "Sharpen",
-    blurb: "Compounding hard, risk coming into focus.",
-  },
-  {
-    key: "transition",
-    label: "Transition",
-    blurb: "Protecting the runway into retirement.",
-  },
-  { key: "live", label: "Live", blurb: "Living off it — make it last." },
+  { key: "sharpen", label: "Sharpen", blurb: "Compounding hard, risk coming into focus." },
+  { key: "transition", label: "Transition", blurb: "Protecting the runway into retirement." },
+  { key: "live", label: "Live", blurb: "Living off it. Make it last." },
 ];
 function phaseFor(age, retirementAge) {
   const yrs = retirementAge - age;
@@ -138,35 +132,17 @@ function phaseFor(age, retirementAge) {
   return "build";
 }
 
+// Neutral risk growth share (equities + gold + bitcoin) per phase, and how the
+// remainder splits between stable (bonds) and cash.
 const BASE_GROWTH = { build: 88, sharpen: 72, transition: 52, live: 40 };
-const STABLE_SHARE_OF_REST = {
-  build: 0.55,
-  sharpen: 0.55,
-  transition: 0.55,
-  live: 0.45,
-};
-const RISK_SHIFT = { conservative: -15, neutral: 0, aggressive: 35 };
+const STABLE_SHARE_OF_REST = { build: 0.55, sharpen: 0.55, transition: 0.55, live: 0.45 };
 
-const ASSET_RETURN = { us: 10.5, intl: 9, gold: 8, btc: 22, stable: 3.4, cash: 1.5 };
+const ASSET_RETURN = { us: 7, intl: 8, gold: 8, btc: 18, stable: 3.4, cash: 1.25 };
+// Rough single bad year decline per asset class. Used only to give a feel
+// for downside, not a precise risk model.
+const ASSET_DOWNSIDE = { us: -37, intl: -40, gold: -15, btc: -73, stable: -5, cash: 0 };
+// Composition inside the growth sleeve. The debasement thesis stays constant.
 const GROWTH_SPLIT = { us: 0.55, intl: 0.2, gold: 0.15, btc: 0.1 };
-
-function allocationFor(phase, risk) {
-  let growth = BASE_GROWTH[phase] + (RISK_SHIFT[risk] || 0);
-  growth = Math.max(15, Math.min(95, growth));
-  const rest = 100 - growth;
-  const stableShare = STABLE_SHARE_OF_REST[phase];
-  const stable = rest * stableShare;
-  const cash = rest * (1 - stableShare);
-  return {
-    growth,
-    stable,
-    cash,
-    us: growth * GROWTH_SPLIT.us,
-    intl: growth * GROWTH_SPLIT.intl,
-    gold: growth * GROWTH_SPLIT.gold,
-    btc: growth * GROWTH_SPLIT.btc,
-  };
-}
 
 function allocationFromGrowthPct(phase, growthPct) {
   const growth = Math.max(15, Math.min(95, growthPct));
@@ -197,67 +173,40 @@ function blendedReturn(alloc) {
   );
 }
 
-function growthPctForReturn(phase, targetReturn) {
-  const lo = 15,
-    hi = 95;
-  let bestPct = lo,
-    bestDiff = Infinity;
-  for (let p = lo; p <= hi; p += 1) {
-    const r = blendedReturn(allocationFromGrowthPct(phase, p));
-    const diff = Math.abs(r - targetReturn);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestPct = p;
-    }
-  }
-  return bestPct;
+function blendedDownside(alloc) {
+  return (
+    (alloc.us * ASSET_DOWNSIDE.us +
+      alloc.intl * ASSET_DOWNSIDE.intl +
+      alloc.gold * ASSET_DOWNSIDE.gold +
+      alloc.btc * ASSET_DOWNSIDE.btc +
+      alloc.stable * ASSET_DOWNSIDE.stable +
+      alloc.cash * ASSET_DOWNSIDE.cash) /
+    100
+  );
 }
 
-function riskForGrowthPct(phase, growthPct) {
-  const presets = ["conservative", "neutral", "aggressive"];
-  let best = "neutral",
-    bestDiff = Infinity;
-  presets.forEach((r) => {
-    const g = Math.max(15, Math.min(95, BASE_GROWTH[phase] + RISK_SHIFT[r]));
-    const diff = Math.abs(g - growthPct);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = r;
-    }
-  });
-  return best;
+function riskLabelFor(growthPct) {
+  if (growthPct < 30) return "Cautious";
+  if (growthPct < 48) return "Moderate";
+  if (growthPct < 65) return "Balanced";
+  if (growthPct < 80) return "Elevated";
+  return "Aggressive";
 }
 
-const GROWTH_RATE_MIN = 3;
-const GROWTH_RATE_MAX = 10;
 
+/* ---------------- chart ---------------- */
 function GrowthChart({ data, color, markAge, onHover }) {
-  const w = 560,
-    h = 190,
-    padL = 50,
-    padR = 10,
-    padT = 10,
-    padB = 24;
+  const w = 560, h = 190, padL = 50, padR = 10, padT = 10, padB = 24;
   if (!data || data.length < 2) return null;
-  const minAge = data[0].age,
-    maxAge = data[data.length - 1].age;
+  const minAge = data[0].age, maxAge = data[data.length - 1].age;
   const maxV = Math.max(...data.map((d) => d.value), 1);
-  const X = (a) =>
-    padL + ((a - minAge) / (maxAge - minAge)) * (w - padL - padR);
+  const X = (a) => padL + ((a - minAge) / (maxAge - minAge)) * (w - padL - padR);
   const Y = (v) => padT + (1 - v / maxV) * (h - padT - padB);
   const line = "M " + data.map((d) => X(d.age) + "," + Y(d.value)).join(" L ");
   const area =
-    "M " +
-    X(minAge) +
-    "," +
-    Y(0) +
-    " L " +
+    "M " + X(minAge) + "," + Y(0) + " L " +
     data.map((d) => X(d.age) + "," + Y(d.value)).join(" L ") +
-    " L " +
-    X(maxAge) +
-    "," +
-    Y(0) +
-    " Z";
+    " L " + X(maxAge) + "," + Y(0) + " Z";
   const xticks = [];
   for (let a = Math.ceil(minAge / 5) * 5; a <= maxAge; a += 5) xticks.push(a);
   const yticks = [0, maxV / 2, maxV];
@@ -267,16 +216,12 @@ function GrowthChart({ data, color, markAge, onHover }) {
     const svg = e.currentTarget;
     const rect = svg.getBoundingClientRect();
     const xPx = ((e.clientX - rect.left) / rect.width) * w;
-    const ageAtX =
-      minAge + ((xPx - padL) / (w - padL - padR)) * (maxAge - minAge);
+    const ageAtX = minAge + ((xPx - padL) / (w - padL - padR)) * (maxAge - minAge);
     let nearest = data[0];
     let bestDiff = Infinity;
     for (const d of data) {
       const diff = Math.abs(d.age - ageAtX);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        nearest = d;
-      }
+      if (diff < bestDiff) { bestDiff = diff; nearest = d; }
     }
     onHover(nearest);
   };
@@ -287,20 +232,12 @@ function GrowthChart({ data, color, markAge, onHover }) {
   return (
     <svg
       viewBox={"0 0 " + w + " " + h}
-      style={{
-        width: "100%",
-        height: "auto",
-        display: "block",
-        cursor: "crosshair",
-      }}
+      style={{ width: "100%", height: "auto", display: "block", cursor: "crosshair" }}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
       onTouchMove={(e) => {
         if (!e.touches || !e.touches[0]) return;
-        handleMove({
-          currentTarget: e.currentTarget,
-          clientX: e.touches[0].clientX,
-        });
+        handleMove({ currentTarget: e.currentTarget, clientX: e.touches[0].clientX });
       }}
       onTouchEnd={handleLeave}
     >
@@ -313,13 +250,7 @@ function GrowthChart({ data, color, markAge, onHover }) {
       {yticks.map((v, i) => (
         <g key={i}>
           <line x1={padL} y1={Y(v)} x2={w - padR} y2={Y(v)} stroke={C.line} />
-          <text
-            x={padL - 6}
-            y={Y(v) + 3}
-            textAnchor="end"
-            fontSize="11"
-            fill={C.inkSoft}
-          >
+          <text x={padL - 6} y={Y(v) + 3} textAnchor="end" fontSize="11" fill={C.inkSoft}>
             {usdC(v)}
           </text>
         </g>
@@ -327,25 +258,10 @@ function GrowthChart({ data, color, markAge, onHover }) {
       <path d={area} fill="url(#grad)" />
       <path d={line} fill="none" stroke={color} strokeWidth="2.5" />
       {markAge != null && markAge >= minAge && markAge <= maxAge && (
-        <line
-          x1={X(markAge)}
-          y1={padT}
-          x2={X(markAge)}
-          y2={h - padB}
-          stroke={C.gold}
-          strokeWidth="1.5"
-          strokeDasharray="4 3"
-        />
+        <line x1={X(markAge)} y1={padT} x2={X(markAge)} y2={h - padB} stroke={C.gold} strokeWidth="1.5" strokeDasharray="4 3" />
       )}
       {xticks.map((a) => (
-        <text
-          key={a}
-          x={X(a)}
-          y={h - 6}
-          textAnchor="middle"
-          fontSize="11"
-          fill={C.inkSoft}
-        >
+        <text key={a} x={X(a)} y={h - 6} textAnchor="middle" fontSize="11" fill={C.inkSoft}>
           {a}
         </text>
       ))}
@@ -355,8 +271,7 @@ function GrowthChart({ data, color, markAge, onHover }) {
 
 /* ---------------- age / phase bar ---------------- */
 function AgeBar({ age, retirementAge }) {
-  const lo = 20,
-    hi = Math.max(90, retirementAge + 5);
+  const lo = 20, hi = Math.max(90, retirementAge + 5);
   const span = hi - lo;
   const stops = [
     { until: retirementAge - 15, color: C.green },
@@ -371,94 +286,45 @@ function AgeBar({ age, retirementAge }) {
     last = end;
     return { start, end, color: s.color };
   });
-  const pct = (a) => ((Math.max(lo, Math.min(hi, a)) - lo) / span) * 100;
+  const pct = (a) => (Math.max(lo, Math.min(hi, a)) - lo) / span * 100;
   const phase = phaseFor(age, retirementAge);
   const phaseInfo = PHASES.find((p) => p.key === phase);
   return (
     <div>
-      <div
-        className="relative"
-        style={{
-          height: 14,
-          borderRadius: 999,
-          overflow: "hidden",
-          display: "flex",
-        }}
-      >
+      <div className="relative" style={{ height: 14, borderRadius: 999, overflow: "hidden", display: "flex" }}>
         {segments.map((s, i) =>
           s.end > s.start ? (
-            <div
-              key={i}
-              style={{
-                width: ((s.end - s.start) / span) * 100 + "%",
-                background: s.color,
-              }}
-            />
-          ) : null,
+            <div key={i} style={{ width: ((s.end - s.start) / span) * 100 + "%", background: s.color }} />
+          ) : null
         )}
       </div>
       <div className="relative" style={{ height: 26 }}>
         <div
           className="absolute"
-          style={{
-            left: pct(retirementAge) + "%",
-            top: -20,
-            transform: "translateX(-50%)",
-            width: 2,
-            height: 20,
-            background: C.inkSoft,
-            opacity: 0.5,
-          }}
+          style={{ left: pct(retirementAge) + "%", top: -20, transform: "translateX(-50%)", width: 2, height: 20, background: C.inkSoft, opacity: 0.5 }}
         />
         <div
           className="absolute"
-          style={{
-            left: pct(retirementAge) + "%",
-            top: 2,
-            transform: "translateX(-50%)",
-            fontSize: 10,
-            color: C.inkSoft,
-            whiteSpace: "nowrap",
-          }}
+          style={{ left: pct(retirementAge) + "%", top: 2, transform: "translateX(-50%)", fontSize: 10, color: C.inkSoft, whiteSpace: "nowrap" }}
         >
           retire at {retirementAge}
         </div>
         <div
           className="absolute"
-          style={{
-            left: pct(age) + "%",
-            top: -24,
-            transform: "translateX(-50%)",
-          }}
+          style={{ left: pct(age) + "%", top: -24, transform: "translateX(-50%)" }}
         >
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: "50%",
-              background: C.ink,
-              border: "3px solid #fff",
-              boxShadow: "0 1px 5px rgba(0,0,0,0.25)",
-            }}
-          />
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.ink, border: "3px solid #fff", boxShadow: "0 1px 5px rgba(0,0,0,0.25)" }} />
         </div>
       </div>
       <div className="mt-3" style={{ fontSize: 13, color: C.inkSoft }}>
-        You're in <strong style={{ color: C.ink }}>{phaseInfo.label}</strong> —{" "}
-        {phaseInfo.blurb}
+        You are in <strong style={{ color: C.ink }}>{phaseInfo.label}</strong>. {phaseInfo.blurb}
       </div>
     </div>
   );
 }
 
 /* ---------------- questionnaire ---------------- */
-const Q_DEFAULTS = {
-  age: 35,
-  retirementAge: 65,
-  portfolio: 150000,
-  savings: 15000,
-  risk: "neutral",
-};
+const Q_DEFAULTS = { age: 25, retirementAge: 65, portfolio: 150000, savings: 20000 };
 
 function Questionnaire({ initial, onSubmit }) {
   const [q, setQ] = useState(initial || Q_DEFAULTS);
@@ -472,8 +338,7 @@ function Questionnaire({ initial, onSubmit }) {
             Financial Freedom Plan
           </h1>
           <p style={{ fontSize: 14, color: C.inkSoft, marginTop: 6 }}>
-            Build financial freedom through long-term investing in diversified,
-            resilient assets.
+            Build financial freedom through long term investing in diversified, resilient assets.
           </p>
         </div>
         <div className="card px-6 py-7 md:px-8 md:py-8">
@@ -484,78 +349,66 @@ function Questionnaire({ initial, onSubmit }) {
             </div>
             <div className="q-field">
               <label>Retirement age</label>
-              <CommaInput
-                value={q.retirementAge}
-                onChange={(v) => set({ retirementAge: v })}
-              />
+              <CommaInput value={q.retirementAge} onChange={(v) => set({ retirementAge: v })} />
             </div>
           </div>
           <div className="q-field mt-4">
             <label>Current portfolio value</label>
-            <CommaInput
-              value={q.portfolio}
-              onChange={(v) => set({ portfolio: v })}
-            />
+            <CommaInput value={q.portfolio} onChange={(v) => set({ portfolio: v })} />
           </div>
           {preRetirement && (
             <div className="q-field mt-4">
               <label>Annual savings (investing per year)</label>
-              <CommaInput
-                value={q.savings}
-                onChange={(v) => set({ savings: v })}
-              />
+              <CommaInput value={q.savings} onChange={(v) => set({ savings: v })} />
             </div>
           )}
-          <div className="mt-5">
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: C.inkSoft,
-                marginBottom: 8,
-              }}
-            >
-              Risk tolerance
-            </label>
-            <div
-              className="seg"
-              style={{
-                width: "100%",
-                justifyContent: "space-between",
-                display: "flex",
-              }}
-            >
-              {["conservative", "neutral", "aggressive"].map((r) => (
-                <button
-                  key={r}
-                  className={r === q.risk ? "active" : ""}
-                  style={{ flex: 1 }}
-                  onClick={() => set({ risk: r })}
-                >
-                  {r[0].toUpperCase() + r.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
           <button
             onClick={() => onSubmit(q)}
             className="w-full mt-7 rounded-full"
-            style={{
-              background: C.green,
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 15,
-              padding: "13px 0",
-            }}
+            style={{ background: C.green, color: "#fff", fontWeight: 700, fontSize: 15, padding: "13px 0" }}
           >
             See my plan
           </button>
-          <div
-            className="text-center mt-4"
-            style={{ fontSize: 11, color: C.inkSoft }}
-          >
-            Illustrative only — not financial advice.
+          <div className="text-center mt-4" style={{ fontSize: 11, color: C.inkSoft }}>
+            Estimates only. Not financial advice.
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- what is this / how to run it ---------------- */
+const MAINTENANCE = [
+  "Rebalance once or twice a year. Only act on a sleeve that has drifted past its band. Otherwise do nothing.",
+  "Trim growth toward the low end of its band only when risk is clearly elevated. Small trims, never exits.",
+  "Use cash to add to growth positions when prices offer good value. Otherwise keep the buffer intact.",
+  "Always keep a cash buffer. Size of buffer grows as retirement gets closer.",
+];
+
+function WhatIsThis() {
+  return (
+    <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon name="compass" size={18} color={C.gold} />
+        <div className="eyebrow" style={{ marginBottom: 0 }}>What this is</div>
+      </div>
+      <p style={{ fontSize: 14.5, color: C.ink, lineHeight: 1.6 }}>
+        Inflation and currency debasement quietly shrink cash that just sits still, so this plan leans on stocks, gold, and bitcoin to stay ahead of it. But volatile assets can also burn you if you are forced to sell at the wrong time. A cash buffer exists so that never happens: spend from cash first, let growth assets recover, rebalance on a calm schedule, never in a panic.
+      </p>
+
+      <div className="grid gap-2 mt-5">
+        {MAINTENANCE.map((m, i) => (
+          <div key={i} className="flex items-start gap-3 rounded-xl px-4 py-2.5" style={{ background: C.bg, border: "1px solid " + C.line }}>
+            <span className="serif shrink-0" style={{ fontSize: 18, fontWeight: 600, color: C.gold, lineHeight: 1.2 }}>{i + 1}</span>
+            <span style={{ fontSize: 13, color: C.ink, lineHeight: 1.45 }}>{m}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-xl px-4 py-3" style={{ background: C.bg, border: "1px solid " + C.line }}>
+        <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.5 }}>
+          This plan covers the asset mix only. It does not account for account types such as 401k, IRA, or Roth, or the tax treatment that comes with them. In addition, this portfolio does <b>NOT</b> include your <b>Emergency Savings</b>. You should always have 3-6 months spending stored away in a savings account.
         </div>
       </div>
     </div>
@@ -572,7 +425,7 @@ function FlowCard({ alloc, portfolio }) {
       color: C.green,
       soft: C.greenSoft,
       pct: alloc.growth,
-      note: "The engine — long-term compounding",
+      note: "The engine. Long term compounding.",
       sub: [
         { label: "US stocks", pct: alloc.us },
         { label: "International stocks", pct: alloc.intl },
@@ -580,21 +433,27 @@ function FlowCard({ alloc, portfolio }) {
         { label: "Bitcoin", pct: alloc.btc },
       ],
     },
-    {
+{
       label: "Stable",
       color: C.blue,
       soft: C.blueSoft,
       pct: alloc.stable,
-      note: "Bonds & treasuries — ballast that steadies the ride",
-      sub: null,
+      note: "A T bill ladder. Ballast that steadies the ride.",
+      sub: [
+        { label: "3 month T bills", pct: alloc.stable * 0.34 },
+        { label: "6 month T bills", pct: alloc.stable * 0.33 },
+        { label: "12 month T bills", pct: alloc.stable * 0.33 },
+      ],
     },
     {
       label: "Cash buffer",
       color: C.stone,
       soft: "#F0EDE5",
       pct: alloc.cash,
-      note: "T-bills & savings — spend from here first",
-      sub: null,
+      note: "A high yield savings account. Spend from here first.",
+      sub: [
+        { label: "HYSA", pct: alloc.cash },
+      ],
     },
   ];
 
@@ -602,7 +461,7 @@ function FlowCard({ alloc, portfolio }) {
     <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
       <div className="eyebrow mb-1">Today's target mix</div>
       <p style={{ fontSize: 13, color: C.inkSoft, marginBottom: 16 }}>
-        Based on {usdC(portfolio)} at your current growth-rate setting.
+        Based on {usdC(portfolio)} at your current growth rate setting.
       </p>
 
       <div className="grid gap-4">
@@ -610,38 +469,18 @@ function FlowCard({ alloc, portfolio }) {
           <div
             key={b.label}
             className="rounded-2xl px-5 py-5"
-            style={{
-              background: b.soft,
-              border: "1px solid " + b.color,
-              borderOpacity: 0.2,
-            }}
+            style={{ background: b.soft, border: "1px solid " + b.color, borderOpacity: 0.2 }}
           >
             <div className="flex items-start justify-between flex-wrap gap-2">
               <div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: b.color }}>
-                  {b.label}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: C.inkSoft,
-                    marginTop: 2,
-                    maxWidth: 380,
-                  }}
-                >
-                  {b.note}
-                </div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: b.color }}>{b.label}</div>
+                <div style={{ fontSize: 12.5, color: C.inkSoft, marginTop: 2, maxWidth: 380 }}>{b.note}</div>
               </div>
               <div className="text-right">
-                <div
-                  className="serif"
-                  style={{ fontSize: 26, fontWeight: 600, color: b.color }}
-                >
+                <div className="serif" style={{ fontSize: 26, fontWeight: 600, color: b.color }}>
                   {Math.round(b.pct)}%
                 </div>
-                <div style={{ fontSize: 13, color: C.inkSoft }}>
-                  {usdC(dollars(b.pct))}
-                </div>
+                <div style={{ fontSize: 13, color: C.inkSoft }}>{usdC(dollars(b.pct))}</div>
               </div>
             </div>
 
@@ -651,27 +490,13 @@ function FlowCard({ alloc, portfolio }) {
                   <div
                     key={s.label}
                     className="rounded-xl px-3 py-2.5"
-                    style={{
-                      background: "rgba(255,255,255,0.6)",
-                      border: "1px solid rgba(0,0,0,0.06)",
-                    }}
+                    style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.06)" }}
                   >
-                    <div style={{ fontSize: 11, color: C.inkSoft }}>
-                      {s.label}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: C.ink,
-                        marginTop: 2,
-                      }}
-                    >
+                    <div style={{ fontSize: 11, color: C.inkSoft }}>{s.label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, marginTop: 2 }}>
                       {s.pct.toFixed(1)}%
                     </div>
-                    <div style={{ fontSize: 11.5, color: C.inkSoft }}>
-                      {usdC(dollars(s.pct))}
-                    </div>
+                    <div style={{ fontSize: 11.5, color: C.inkSoft }}>{usdC(dollars(s.pct))}</div>
                   </div>
                 ))}
               </div>
@@ -680,26 +505,13 @@ function FlowCard({ alloc, portfolio }) {
         ))}
       </div>
 
-      <div
-        className="mt-5 rounded-xl px-4 py-4"
-        style={{ background: C.greenSoft }}
-      >
+      <div className="mt-5 rounded-xl px-4 py-4" style={{ background: C.greenSoft }}>
         <div className="flex items-start gap-2.5">
           <Icon name="shield" size={20} color={C.green} />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: C.green }}>
-              When markets drop
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: C.green,
-                lineHeight: 1.5,
-                marginTop: 4,
-              }}
-            >
-              Spend from cash and skip the trim. A downturn should never force a
-              sale of stocks at a loss — that's the whole point of the buckets.
+            <div style={{ fontWeight: 700, fontSize: 14, color: C.green }}>When markets drop</div>
+            <div style={{ fontSize: 13, color: C.green, lineHeight: 1.5, marginTop: 4 }}>
+              Spend from cash and increase growth engine with cash buffer if possible. A downturn should never force a sale of stocks at a loss. That is the whole point of the buckets.
             </div>
           </div>
         </div>
@@ -708,46 +520,19 @@ function FlowCard({ alloc, portfolio }) {
   );
 }
 
-/* ---------------- maintenance / principles ---------------- */
-const MAINTENANCE = [
-  "Rebalance once or twice a year. Only act on a sleeve that's drifted past its band — otherwise do nothing.",
-  "Trim growth toward the low end of its band only when risk is clearly elevated. Small trims, never exits.",
-  "Cash buffer stays sized to 2–3 years of spending once you're within a few years of retiring.",
-  "Keep it boring on purpose. Low activity isn't no attention — the yearly check confirms each sleeve still does its job.",
-];
-const PRINCIPLES = [
-  { icon: "leaf", t: "Stay well-funded — let it compound, don't tinker." },
-  {
-    icon: "shield",
-    t: "Own real, uncorrelated assets — a little for every season.",
-  },
-  {
-    icon: "wallet",
-    t: "Never be a forced seller — the cash buffer protects the stocks.",
-  },
-  { icon: "coins", t: "Quality of life over squeezing every last dollar." },
-];
-
 /* ---------------- result / plan view ---------------- */
 function Result({ answers, onReset }) {
   const [a, setA] = useState(answers);
   const [stress, setStress] = useState(false);
-  const [hoverPoint, setHoverPoint] = useState(null);
   const [edit, setEdit] = useState(false);
+  const [hoverPoint, setHoverPoint] = useState(null);
 
-  const [spendOverride, setSpendOverride] = useState(
-    answers.spendOverride ?? null,
-  );
-  const [growthOverride, setGrowthOverride] = useState(
-    answers.growthOverride ?? null,
-  );
+  const [spendOverride, setSpendOverride] = useState(answers.spendOverride ?? null);
+  const [growthOverride, setGrowthOverride] = useState(answers.growthOverride ?? null);
 
   useEffect(() => {
     try {
-      localStorage.setItem(
-        "ffp-answers",
-        JSON.stringify({ ...a, spendOverride, growthOverride }),
-      );
+      localStorage.setItem("ffp-answers", JSON.stringify({ ...a, spendOverride, growthOverride }));
     } catch (e) {}
   }, [a, spendOverride, growthOverride]);
   const set = (patch) => setA((p) => ({ ...p, ...patch }));
@@ -755,27 +540,24 @@ function Result({ answers, onReset }) {
   const preRetirement = a.age < a.retirementAge;
   const phaseToday = phaseFor(a.age, a.retirementAge);
 
-  const baseAllocToday = useMemo(
-    () => allocationFor(phaseToday, a.risk),
-    [phaseToday, a.risk],
-  );
-  const baseReturnToday = useMemo(
-    () => blendedReturn(baseAllocToday),
-    [baseAllocToday],
-  );
+  // Growth % is the single source of truth for allocation. The risk toggle
+  // sets it via BASE_GROWTH + RISK_SHIFT. The slider overrides it directly,
+  // on the same 15 to 95 scale, so there is never a mismatch between the two.
+const baseGrowthPct = useMemo(() => {
+    return Math.max(15, Math.min(95, BASE_GROWTH[phaseToday]));
+  }, [phaseToday]);
+  const growthPct = growthOverride != null ? growthOverride : baseGrowthPct;
 
-  const growthRate = growthOverride != null ? growthOverride : baseReturnToday;
-
-  const allocToday = useMemo(() => {
-    const growthPct = growthPctForReturn(phaseToday, growthRate);
-    return allocationFromGrowthPct(phaseToday, growthPct);
-  }, [phaseToday, growthRate]);
-
-  const effectiveRisk = useMemo(
-    () => riskForGrowthPct(phaseToday, allocToday.growth),
-    [phaseToday, allocToday.growth],
+  const allocToday = useMemo(
+    () => allocationFromGrowthPct(phaseToday, growthPct),
+    [phaseToday, growthPct]
   );
 
+const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
+  const downside = useMemo(() => blendedDownside(allocToday), [allocToday]);
+  const riskLabel = useMemo(() => riskLabelFor(growthPct), [growthPct]);
+
+  // Simulate from current age to 90.
   const sim = useMemo(() => {
     const data = [];
     let bal = a.portfolio;
@@ -785,7 +567,6 @@ function Result({ answers, onReset }) {
     const stressYears = stress ? 3 : 0;
     for (let age = a.age; age <= 90; age++) {
       data.push({ age, value: Math.max(0, Math.round(bal)) });
-      const phase = phaseFor(age, a.retirementAge);
       let r = growthRate / 100;
       const yearsIntoRetirement = age - a.retirementAge;
       if (yearsIntoRetirement >= 0 && yearsIntoRetirement < stressYears) {
@@ -798,12 +579,7 @@ function Result({ answers, onReset }) {
       if (age < a.retirementAge) {
         bal = bal * (1 + r) + a.savings;
       } else {
-        const spend =
-          spendOverride != null
-            ? spendOverride
-            : ruleSpend != null
-              ? ruleSpend
-              : bal * 0.04;
+        const spend = spendOverride != null ? spendOverride : (ruleSpend != null ? ruleSpend : bal * 0.04);
         bal = bal * (1 + r) - spend;
       }
       if (bal <= 0 && runOut === null) runOut = age + 1;
@@ -813,26 +589,9 @@ function Result({ answers, onReset }) {
       ruleSpend = a.portfolio * 0.04;
     }
     const actualSpend = spendOverride != null ? spendOverride : ruleSpend;
-    const withdrawalRate =
-      balAtRetirement > 0 ? (actualSpend / balAtRetirement) * 100 : 0;
-    return {
-      data,
-      balAtRetirement,
-      ruleSpend,
-      actualSpend,
-      withdrawalRate,
-      runOut,
-      end: data[data.length - 1].value,
-    };
-  }, [
-    a.age,
-    a.retirementAge,
-    a.portfolio,
-    a.savings,
-    growthRate,
-    spendOverride,
-    stress,
-  ]);
+    const withdrawalRate = balAtRetirement > 0 ? (actualSpend / balAtRetirement) * 100 : 0;
+    return { data, balAtRetirement, ruleSpend, actualSpend, withdrawalRate, runOut, end: data[data.length - 1].value };
+  }, [a.age, a.retirementAge, a.portfolio, a.savings, growthRate, spendOverride, stress]);
 
   const numInput = (val, on, w = 120) => (
     <CommaInput
@@ -846,110 +605,66 @@ function Result({ answers, onReset }) {
   return (
     <div className="min-h-screen w-full px-4 py-8 md:px-8">
       <div className="mx-auto" style={{ maxWidth: 900 }}>
+        {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h1
-              className="serif"
-              style={{ fontSize: 32, lineHeight: 1.1, fontWeight: 600 }}
-            >
+            <h1 className="serif" style={{ fontSize: 32, lineHeight: 1.1, fontWeight: 600 }}>
               Financial Freedom Plan
             </h1>
             <p style={{ fontSize: 13, color: C.inkSoft, marginTop: 4 }}>
-              Build financial freedom through long-term investing in
-              diversified, resilient assets.
+              Build financial freedom through long term investing in diversified, resilient assets.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+<div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onReset}
               className="flex items-center gap-1 px-3 rounded-full text-sm"
-              style={{
-                height: 40,
-                border: "1px solid " + C.line,
-                color: C.inkSoft,
-              }}
+              style={{ height: 40, border: "1px solid " + C.line, color: C.inkSoft }}
             >
               <Icon name="rotate" size={13} /> Reset
             </button>
-            <button
-              onClick={() => setEdit((v) => !v)}
-              className="rounded-full flex items-center justify-center"
-              style={{
-                width: 40,
-                height: 40,
-                border: "1px solid " + C.line,
-                background: edit ? C.gold : C.card,
-                color: edit ? "#fff" : C.inkSoft,
-              }}
-            >
-              {edit ? (
-                <Icon name="check" size={18} />
-              ) : (
-                <Icon name="pencil" size={16} />
-              )}
-            </button>
           </div>
         </div>
 
+        {/* What is this */}
+        <WhatIsThis />
+
+        {/* Today strip */}
         <div className="mb-6 grid grid-cols-2 gap-4">
           <div className="px-5 py-4 card">
             <div style={{ fontSize: 12, color: C.inkSoft }}>Age</div>
-            {edit ? (
-              numInput(a.age, (v) => set({ age: v }), 80)
-            ) : (
-              <div className="serif" style={{ fontSize: 30, fontWeight: 600 }}>
-                {a.age}
-              </div>
+            {edit ? numInput(a.age, (v) => set({ age: v }), 80) : (
+              <div className="serif" style={{ fontSize: 30, fontWeight: 600 }}>{a.age}</div>
             )}
           </div>
           <div className="px-5 py-4 card">
-            <div style={{ fontSize: 12, color: C.inkSoft }}>
-              Portfolio today
-            </div>
-            {edit ? (
-              numInput(a.portfolio, (v) => set({ portfolio: v }), 150)
-            ) : (
-              <div className="serif" style={{ fontSize: 30, fontWeight: 600 }}>
-                {usdC(a.portfolio)}
-              </div>
+            <div style={{ fontSize: 12, color: C.inkSoft }}>Portfolio today</div>
+            {edit ? numInput(a.portfolio, (v) => set({ portfolio: v }), 150) : (
+              <div className="serif" style={{ fontSize: 30, fontWeight: 600 }}>{usdC(a.portfolio)}</div>
             )}
           </div>
         </div>
 
+        {/* Verdict + timeline */}
         <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
           <div className="eyebrow mb-3">The verdict</div>
           {preRetirement ? (
-            <p
-              className="serif"
-              style={{ fontSize: 22, lineHeight: 1.4, fontWeight: 500 }}
-            >
-              At this pace, you're on track for about{" "}
-              <span style={{ color: C.green, fontWeight: 700 }}>
-                {usdC(sim.balAtRetirement)}
-              </span>{" "}
-              by age {a.retirementAge} — enough to safely spend roughly{" "}
-              <span style={{ color: C.green, fontWeight: 700 }}>
-                {usd(sim.ruleSpend)}/yr
-              </span>{" "}
-              using the 4% rule.
+            <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, fontWeight: 500 }}>
+              At this pace, you are on track for about{" "}
+              <span style={{ color: C.green, fontWeight: 700 }}>{usdC(sim.balAtRetirement)}</span> by age{" "}
+              {a.retirementAge}, enough to safely spend roughly{" "}
+              <span style={{ color: C.green, fontWeight: 700 }}>{usd(sim.ruleSpend)}/yr</span> using the 4% rule.
             </p>
           ) : (
-            <p
-              className="serif"
-              style={{ fontSize: 22, lineHeight: 1.4, fontWeight: 500 }}
-            >
+            <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, fontWeight: 500 }}>
               Based on the 4% rule, you can safely spend about{" "}
-              <span style={{ color: C.green, fontWeight: 700 }}>
-                {usd(sim.ruleSpend)}/yr
-              </span>{" "}
-              from your {usdC(a.portfolio)}.
+              <span style={{ color: C.green, fontWeight: 700 }}>{usd(sim.ruleSpend)}/yr</span> from your{" "}
+              {usdC(a.portfolio)}.
             </p>
           )}
           {sim.runOut && (
             <p style={{ fontSize: 13, color: C.danger, marginTop: 6 }}>
-              At this pace, funds would run low around age {sim.runOut}. Raising
-              savings, lowering the retirement-age target, lowering spending, or
-              reducing the growth-rate assumption would fix this.
+              At this pace, funds would run low around age {sim.runOut}. Raising savings, lowering the retirement age target, lowering spending, or reducing the growth rate assumption would fix this.
             </p>
           )}
 
@@ -957,57 +672,26 @@ function Result({ answers, onReset }) {
             <AgeBar age={a.age} retirementAge={a.retirementAge} />
           </div>
 
-          <div className="mt-6 grid sm:grid-cols-2 gap-5">
-            <div>
-              <div
-                className="flex justify-between mb-1"
-                style={{ fontSize: 12, color: C.inkSoft }}
-              >
-                <span>Retirement age</span>
-                <span style={{ fontWeight: 700, color: C.ink }}>
-                  {a.retirementAge}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={Math.max(a.age + 1, 45)}
-                max={75}
-                step={1}
-                value={a.retirementAge}
-                onChange={(e) => set({ retirementAge: Number(e.target.value) })}
-              />
+     <div className="mt-6">
+            <div className="flex justify-between mb-1" style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700, color: C.ink}}>
+              <span>Retirement age</span>
+              <span style={{ fontWeight: 700, color: C.ink }}>{a.retirementAge}</span>
             </div>
-            <div>
-              <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 6 }}>
-                Risk tolerance
-              </div>
-              <div className="seg" style={{ display: "flex" }}>
-                {["conservative", "neutral", "aggressive"].map((r) => (
-                  <button
-                    key={r}
-                    className={r === effectiveRisk ? "active" : ""}
-                    style={{ flex: 1 }}
-                    onClick={() => {
-                      set({ risk: r });
-                      setGrowthOverride(null);
-                    }}
-                  >
-                    {r[0].toUpperCase() + r.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <input
+              type="range"
+              min={Math.max(a.age + 1, 45)}
+              max={75}
+              step={1}
+              value={a.retirementAge}
+              onChange={(e) => set({ retirementAge: Number(e.target.value) })}
+            />
           </div>
 
           <div className="mt-5">
-            <div
-              className="flex justify-between mb-1"
-              style={{ fontSize: 12, color: C.inkSoft }}
-            >
+            <div className="flex justify-between mb-1" style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700, color: C.ink }}>
               <span>Spending in retirement</span>
               <span style={{ fontWeight: 700, color: C.ink }}>
-                {usd(sim.actualSpend)}/yr · {sim.withdrawalRate.toFixed(1)}%
-                withdrawal
+                {usd(sim.actualSpend)}/yr, {sim.withdrawalRate.toFixed(1)}% withdrawal
               </span>
             </div>
             <input
@@ -1019,18 +703,11 @@ function Result({ answers, onReset }) {
               onChange={(e) => setSpendOverride(Number(e.target.value))}
             />
             <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>
-              4%-rule reference: {usd(sim.ruleSpend)}/yr
+              4% rule reference: {usd(sim.ruleSpend)}/yr
               {spendOverride != null && (
                 <button
                   onClick={() => setSpendOverride(null)}
-                  style={{
-                    marginLeft: 8,
-                    color: C.gold,
-                    textDecoration: "underline",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
+                  style={{ marginLeft: 8, color: C.gold, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
                 >
                   reset to 4% rule
                 </button>
@@ -1040,14 +717,9 @@ function Result({ answers, onReset }) {
 
           {preRetirement && (
             <div className="mt-5">
-              <div
-                className="flex justify-between mb-1"
-                style={{ fontSize: 12, color: C.inkSoft }}
-              >
-                <span>Annual savings (investing per year)</span>
-                <span style={{ fontWeight: 700, color: C.ink }}>
-                  {usdK(a.savings)}/yr
-                </span>
+              <div className="flex justify-between mb-1" style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700, color: C.ink }}>
+                <span>Annual savings</span>
+                <span style={{ fontWeight: 700, color: C.ink }}>{usdK(a.savings)}/yr</span>
               </div>
               <input
                 type="range"
@@ -1068,154 +740,63 @@ function Result({ answers, onReset }) {
             <button
               onClick={() => setStress((v) => !v)}
               className="flex items-center gap-1 px-3 py-1 rounded-full text-xs"
-              style={{
-                border: "1px solid " + C.line,
-                background: stress ? C.goldSoft : C.card,
-                color: stress ? C.gold : C.inkSoft,
-                fontWeight: 600,
-              }}
+              style={{ border: "1px solid " + C.line, background: stress ? C.goldSoft : C.card, color: stress ? C.gold : C.inkSoft, fontWeight: 600 }}
             >
-              <Icon
-                name="storm"
-                size={13}
-                color={stress ? C.gold : C.inkSoft}
-              />{" "}
-              Rough start in retirement
+              <Icon name="storm" size={13} color={stress ? C.gold : C.inkSoft} /> Rough start in retirement
             </button>
           </div>
-          <p
-            className="mb-3"
-            style={{ fontSize: 13, color: C.inkSoft, maxWidth: 560 }}
-          >
-            From {usdC(a.portfolio)} today,{" "}
-            {preRetirement
-              ? `investing ${usdK(a.savings)}/yr until ${a.retirementAge}, then `
-              : ""}
-            spending about {usd(sim.actualSpend)}/yr from age {a.retirementAge}{" "}
-            on, assuming {growthRate.toFixed(1)}%/yr growth.{" "}
-            {stress
-              ? "This run assumes a rough first few years of retirement — a real stress test."
-              : "This run assumes steady average returns each year."}
+          <p className="mb-3" style={{ fontSize: 13, color: C.inkSoft, maxWidth: 560 }}>
+            From {usdC(a.portfolio)} today, {preRetirement ? `investing ${usdK(a.savings)}/yr until ${a.retirementAge}, then ` : ""}
+            spending about {usd(sim.actualSpend)}/yr from age {a.retirementAge} on, assuming {growthRate.toFixed(1)}%/yr growth.{" "}
+            {stress ? "This run assumes a rough first few years of retirement, a real stress test." : "This run assumes steady average returns each year."}
           </p>
 
           <div className="mb-4">
-            <div
-              className="serif"
-              style={{
-                fontSize: 34,
-                fontWeight: 600,
-                color: C.green,
-                lineHeight: 1.1,
-              }}
-            >
+            <div className="serif" style={{ fontSize: 34, fontWeight: 600, color: C.green, lineHeight: 1.1 }}>
               {usdC(hoverPoint ? hoverPoint.value : sim.data[0].value)}
             </div>
             <div style={{ fontSize: 13, color: C.inkSoft, marginTop: 2 }}>
               {hoverPoint ? (
-                <>
-                  at age{" "}
-                  <strong style={{ color: C.ink }}>{hoverPoint.age}</strong>
-                </>
+                <>at age <strong style={{ color: C.ink }}>{hoverPoint.age}</strong></>
               ) : (
                 "hover the chart to see any year"
               )}
             </div>
           </div>
-          <div className="mb-5">
-            <div
-              className="flex justify-between mb-1"
-              style={{ fontSize: 12, color: C.inkSoft }}
-            >
-              <span>Growth rate — cautious to insane</span>
-              <span style={{ fontWeight: 700, color: C.ink }}>
-                {growthRate.toFixed(1)}%/yr
+
+     <div className="mb-5">
+            <div className="flex justify-between items-baseline mb-1 flex-wrap gap-1" style={{ fontSize: 12, color: C.inkSoft }}>
+              <span>Growth rate. Cautious to aggressive.</span>
+              <span>
+                <span style={{ fontWeight: 700, color: C.ink }}>{growthRate.toFixed(1)}%/yr</span>
+                <span style={{ color: C.inkSoft }}> expected </span>
+                <span style={{ fontWeight: 700, color: C.danger }}>{downside.toFixed(0)}%</span>
+                <span style={{ color: C.inkSoft }}> in a bad year</span>
               </span>
             </div>
             <input
               type="range"
-              min={GROWTH_RATE_MIN}
-              max={GROWTH_RATE_MAX}
-              step={0.1}
-              value={growthRate}
+              min={15}
+              max={95}
+              step={1}
+              value={growthPct}
               onChange={(e) => setGrowthOverride(Number(e.target.value))}
             />
-            <div
-              className="flex justify-between"
-              style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}
-            >
-              <span>3% cautious</span>
-              <span>6.5% moderate</span>
-              <span>10% strong</span>
+            <div className="flex justify-between" style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
+              <span>Cautious</span>
+              <span style={{ fontWeight: 600, color: C.gold }}>{riskLabel}</span>
+              <span>Aggressive</span>
             </div>
           </div>
 
-          <GrowthChart
-            data={sim.data}
-            color={C.green}
-            markAge={a.retirementAge}
-            onHover={setHoverPoint}
-          />
+          <GrowthChart data={sim.data} color={C.green} markAge={a.retirementAge} onHover={setHoverPoint} />
         </div>
 
+        {/* Allocation */}
         <FlowCard alloc={allocToday} portfolio={a.portfolio} />
 
-        <div className="mb-6 px-6 py-6 md:px-8 md:py-7 card">
-          <div className="eyebrow mb-4">How to run it</div>
-          <div className="grid gap-2 mb-5">
-            {MAINTENANCE.map((m, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 rounded-xl px-4 py-2.5"
-                style={{ background: C.bg, border: "1px solid " + C.line }}
-              >
-                <span
-                  className="serif shrink-0"
-                  style={{
-                    fontSize: 18,
-                    fontWeight: 600,
-                    color: C.gold,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  {i + 1}
-                </span>
-                <span style={{ fontSize: 13, color: C.ink, lineHeight: 1.45 }}>
-                  {m}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div
-            className="grid sm:grid-cols-2 gap-x-6 gap-y-3 pt-4"
-            style={{ borderTop: "1px solid " + C.line }}
-          >
-            {PRINCIPLES.map((p, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <Icon name={p.icon} size={17} color={C.gold} />
-                <span style={{ fontSize: 13.5, lineHeight: 1.4 }}>{p.t}</span>
-              </div>
-            ))}
-          </div>
-          <div
-            className="mt-5 rounded-xl px-4 py-3 flex items-start gap-2"
-            style={{ background: C.blueSoft }}
-          >
-            <Icon name="wallet" size={17} color={C.blue} />
-            <div style={{ fontSize: 12.5, color: C.blue, lineHeight: 1.5 }}>
-              If you have access to tax-advantaged accounts (401k, IRA, Roth),
-              prioritize filling those first — this plan covers the asset mix,
-              not the account wrapper.
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="text-center pb-4"
-          style={{ fontSize: 12, color: C.inkSoft }}
-        >
-          A compass to feel calm about — not a document to study. Reflects a
-          specific investing thesis (real assets, always some gold and bitcoin).
-          Not financial advice.
+        <div className="text-center pb-4" style={{ fontSize: 12, color: C.inkSoft }}>
+          A compass to feel calm about, not a document to study. Reflects a specific investing thesis. Estimates only. Not financial advice.
         </div>
       </div>
     </div>
