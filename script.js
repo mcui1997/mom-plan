@@ -195,7 +195,7 @@ function riskLabelFor(growthPct) {
 
 
 /* ---------------- chart ---------------- */
-function GrowthChart({ data, color, markAge, onHover }) {
+function GrowthChart({ data, color, markAge, onHover, hoverPoint }) {
   const w = 560, h = 190, padL = 50, padR = 10, padT = 10, padB = 24;
   if (!data || data.length < 2) return null;
   const minAge = data[0].age, maxAge = data[data.length - 1].age;
@@ -229,6 +229,10 @@ function GrowthChart({ data, color, markAge, onHover }) {
     if (onHover) onHover(null);
   };
 
+  const showHover = hoverPoint != null && hoverPoint.age >= minAge && hoverPoint.age <= maxAge;
+  const hx = showHover ? X(hoverPoint.age) : null;
+  const hy = showHover ? Y(hoverPoint.value) : null;
+
   return (
     <svg
       viewBox={"0 0 " + w + " " + h}
@@ -259,6 +263,12 @@ function GrowthChart({ data, color, markAge, onHover }) {
       <path d={line} fill="none" stroke={color} strokeWidth="2.5" />
       {markAge != null && markAge >= minAge && markAge <= maxAge && (
         <line x1={X(markAge)} y1={padT} x2={X(markAge)} y2={h - padB} stroke={C.gold} strokeWidth="1.5" strokeDasharray="4 3" />
+      )}
+      {showHover && (
+        <g>
+          <line x1={hx} y1={padT} x2={hx} y2={h - padB} stroke={C.ink} strokeWidth="1" strokeDasharray="3 3" opacity="0.4" />
+          <circle cx={hx} cy={hy} r="5" fill={color} stroke="#fff" strokeWidth="2" />
+        </g>
       )}
       {xticks.map((a) => (
         <text key={a} x={X(a)} y={h - 6} textAnchor="middle" fontSize="11" fill={C.inkSoft}>
@@ -433,7 +443,7 @@ function FlowCard({ alloc, portfolio }) {
         { label: "Bitcoin", pct: alloc.btc },
       ],
     },
-{
+    {
       label: "Stable",
       color: C.blue,
       soft: C.blueSoft,
@@ -540,10 +550,10 @@ function Result({ answers, onReset }) {
   const preRetirement = a.age < a.retirementAge;
   const phaseToday = phaseFor(a.age, a.retirementAge);
 
-  // Growth % is the single source of truth for allocation. The risk toggle
-  // sets it via BASE_GROWTH + RISK_SHIFT. The slider overrides it directly,
-  // on the same 15 to 95 scale, so there is never a mismatch between the two.
-const baseGrowthPct = useMemo(() => {
+  // Growth % is the single source of truth for allocation. The slider
+  // overrides it directly, on the same 15 to 95 scale, so there is never a
+  // mismatch between what is shown and what is used.
+  const baseGrowthPct = useMemo(() => {
     return Math.max(15, Math.min(95, BASE_GROWTH[phaseToday]));
   }, [phaseToday]);
   const growthPct = growthOverride != null ? growthOverride : baseGrowthPct;
@@ -553,7 +563,7 @@ const baseGrowthPct = useMemo(() => {
     [phaseToday, growthPct]
   );
 
-const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
+  const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
   const downside = useMemo(() => blendedDownside(allocToday), [allocToday]);
   const riskLabel = useMemo(() => riskLabelFor(growthPct), [growthPct]);
 
@@ -615,7 +625,7 @@ const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
               Build financial freedom through long term investing in diversified, resilient assets.
             </p>
           </div>
-<div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onReset}
               className="flex items-center gap-1 px-3 rounded-full text-sm"
@@ -672,9 +682,9 @@ const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
             <AgeBar age={a.age} retirementAge={a.retirementAge} />
           </div>
 
-     <div className="mt-6">
-            <div className="flex justify-between mb-1" style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700, color: C.ink}}>
-              <span>Retirement age</span>
+          <div className="mt-6">
+            <div className="flex justify-between mb-1" style={{ fontSize: 12 }}>
+              <span style={{ fontWeight: 700, color: C.ink }}>Retirement age</span>
               <span style={{ fontWeight: 700, color: C.ink }}>{a.retirementAge}</span>
             </div>
             <input
@@ -688,8 +698,8 @@ const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
           </div>
 
           <div className="mt-5">
-            <div className="flex justify-between mb-1" style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700, color: C.ink }}>
-              <span>Spending in retirement</span>
+            <div className="flex justify-between mb-1" style={{ fontSize: 12 }}>
+              <span style={{ fontWeight: 700, color: C.ink }}>Spending in retirement</span>
               <span style={{ fontWeight: 700, color: C.ink }}>
                 {usd(sim.actualSpend)}/yr, {sim.withdrawalRate.toFixed(1)}% withdrawal
               </span>
@@ -717,8 +727,8 @@ const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
 
           {preRetirement && (
             <div className="mt-5">
-              <div className="flex justify-between mb-1" style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700, color: C.ink }}>
-                <span>Annual savings</span>
+              <div className="flex justify-between mb-1" style={{ fontSize: 12 }}>
+                <span style={{ fontWeight: 700, color: C.ink }}>Annual savings</span>
                 <span style={{ fontWeight: 700, color: C.ink }}>{usdK(a.savings)}/yr</span>
               </div>
               <input
@@ -764,7 +774,7 @@ const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
             </div>
           </div>
 
-     <div className="mb-5">
+          <div className="mb-5">
             <div className="flex justify-between items-baseline mb-1 flex-wrap gap-1" style={{ fontSize: 12, color: C.inkSoft }}>
               <span>Growth rate. Cautious to aggressive.</span>
               <span>
@@ -784,12 +794,12 @@ const growthRate = useMemo(() => blendedReturn(allocToday), [allocToday]);
             />
             <div className="flex justify-between" style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
               <span>Cautious</span>
-              <span style={{ fontWeight: 600, color: C.gold }}>{riskLabel}</span>
+              <span>Moderate</span>
               <span>Aggressive</span>
             </div>
           </div>
 
-          <GrowthChart data={sim.data} color={C.green} markAge={a.retirementAge} onHover={setHoverPoint} />
+          <GrowthChart data={sim.data} color={C.green} markAge={a.retirementAge} onHover={setHoverPoint} hoverPoint={hoverPoint} />
         </div>
 
         {/* Allocation */}
